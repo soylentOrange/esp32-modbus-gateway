@@ -16,6 +16,8 @@
             int8_t _modbusRtsPin;
             unsigned long _serialBaudRate;
             uint32_t _serialConfig;
+            uint8_t _statusViaModbusEnable;
+            uint8_t _statusViaModbusAddress;
         public:
             Config();
             void begin(Preferences *prefs);
@@ -43,6 +45,10 @@
             void setSerialParity(uint8_t value);
             uint8_t getSerialStopBits();
             void setSerialStopBits(uint8_t value);
+            uint8_t getStatusViaModbusEnable();
+            void setStatusViaModbusEnable(uint8_t value);
+            uint8_t getStatusViaModbusAddress();
+            void setStatusViaModbusAddress(uint8_t value);
     };
     #ifdef DEBUG
     #define dbg(x...) debugSerial.print(x);

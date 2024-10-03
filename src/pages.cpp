@@ -156,6 +156,7 @@ void setupPages(AsyncWebServer *server, ModbusClientRTU *rtu, ModbusBridgeWiFi *
             "<label for=\"sb\">Baud rate</label>"
           "</td>"
           "<td>");
+
     response->printf("<input type=\"number\" min=\"0\" id=\"sb\" name=\"sb\" value=\"%lu\">", config->getSerialBaudRate());
     response->print("</td>"
         "</tr>"
@@ -172,6 +173,7 @@ void setupPages(AsyncWebServer *server, ModbusClientRTU *rtu, ModbusBridgeWiFi *
             "<label for=\"sp\">Parity</label>"
           "</td>"
           "<td>");
+
     response->printf("<select id=\"sp\" name=\"sp\" data-value=\"%d\">", config->getSerialParity());
     response->print("<option value=\"0\">None</option>"
               "<option value=\"2\">Even</option>"
@@ -184,6 +186,7 @@ void setupPages(AsyncWebServer *server, ModbusClientRTU *rtu, ModbusBridgeWiFi *
             "<label for=\"ss\">Stop bits</label>"
           "</td>"
           "<td>");
+
     response->printf("<select id=\"ss\" name=\"ss\" data-value=\"%d\">", config->getSerialStopBits());
     response->print("<option value=\"1\">1 bit</option>"
               "<option value=\"2\">1.5 bits</option>"
@@ -191,7 +194,30 @@ void setupPages(AsyncWebServer *server, ModbusClientRTU *rtu, ModbusBridgeWiFi *
             "</select>"
           "</td>"
         "</tr>"
-        "</table>");
+        "</table>"
+        "<h3>Status via Modbus TCP</h3>"
+        "<table>"
+        "<tr>"
+          "<td>"
+            "<label for=\"re\">enabled</label>"
+          "</td>"
+          "<td>");
+    response->printf("<select id=\"re\" name=\"re\" data-value=\"%d\">", config->getStatusViaModbusEnable());  
+    response->print("<option value=\"0\">disabled</option>"
+              "<option value=\"1\">enabled</option>"
+            "</select>"
+          "</td>"
+        "</tr>"
+        "<tr>"
+          "<td>"
+            "<label for=\"ra\">Status Modbus Address</label>"
+          "</td>"
+          "<td>"); 
+    response->printf("<input type=\"number\" min=\"1\" max=\"247\" id=\"ra\" name=\"ra\" value=\"%d\">", config->getStatusViaModbusAddress());
+    response->print("</td>"
+        "</tr>"
+        "</table>"
+        "<h3> </h3>");  
     response->print("<button class=\"r\">Save</button>"
       "</form>"
       "<p></p>");
@@ -262,6 +288,16 @@ void setupPages(AsyncWebServer *server, ModbusClientRTU *rtu, ModbusBridgeWiFi *
       auto stop = request->getParam("ss", true)->value().toInt();
       config->setSerialStopBits(stop);
       dbgln("[webserver] saved serial stop bits");
+    }
+    if (request->hasParam("re", true)){
+      auto enabled = request->getParam("re", true)->value().toInt();
+      config->setStatusViaModbusEnable(enabled);
+      dbgln("[webserver] saved Status via Modbus enable");
+    }
+    if (request->hasParam("ra", true)){
+      auto enabled = request->getParam("ra", true)->value().toInt();
+      config->setStatusViaModbusAddress(enabled);
+      dbgln("[webserver] saved Status via Modbus address");
     }
     request->redirect("/");    
   });

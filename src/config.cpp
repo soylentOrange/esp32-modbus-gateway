@@ -9,6 +9,8 @@ Config::Config()
     ,_modbusRtsPin(-1)
     ,_serialBaudRate(115200)
     ,_serialConfig(SERIAL_8N1)
+    ,_statusViaModbusEnable(0)
+    ,_statusViaModbusAddress(247)
 {}
 
 void Config::begin(Preferences *prefs)
@@ -21,6 +23,8 @@ void Config::begin(Preferences *prefs)
     _modbusRtsPin = _prefs->getChar("modbusRtsPin", _modbusRtsPin);
     _serialBaudRate = _prefs->getULong("serialBaudRate", _serialBaudRate);
     _serialConfig = _prefs->getULong("serialConfig", _serialConfig);
+    _statusViaModbusEnable = _prefs->getUChar("statusViaModbusEnable", _statusViaModbusEnable);
+    _statusViaModbusAddress = _prefs->getUChar("statusViaModbusAddress", _statusViaModbusAddress);
 }
 
 uint16_t Config::getTcpPort(){
@@ -153,4 +157,27 @@ void Config::setSerialStopBits(uint8_t value){
     if (stopbits == value) return;
     _serialConfig = (_serialConfig & 0xffffffcf) | value;
     _prefs->putULong("serialConfig", _serialConfig);
+}
+
+uint8_t Config::getStatusViaModbusEnable(){
+    return _statusViaModbusEnable;
+}
+
+void Config::setStatusViaModbusEnable(uint8_t value){
+     if (_statusViaModbusEnable == value) return;
+    _statusViaModbusEnable = value;
+    _statusViaModbusEnable = _prefs->getUChar("statusViaModbusEnable", _statusViaModbusEnable);
+}
+
+uint8_t Config::getStatusViaModbusAddress(){
+    return _statusViaModbusAddress;
+}
+
+void Config::setStatusViaModbusAddress(uint8_t value){
+     if (_statusViaModbusAddress == value) return;
+     if ((value < 1) || (value > 246)) {
+        value = 247;
+     }
+    _statusViaModbusAddress = value;
+    _statusViaModbusAddress = _prefs->getUChar("statusViaModbusAddress", _statusViaModbusAddress);
 }
