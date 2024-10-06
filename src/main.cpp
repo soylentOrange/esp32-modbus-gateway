@@ -25,8 +25,15 @@ void setup() {
   config.begin(&prefs);
   debugSerial.end();
   debugSerial.begin(config.getSerialBaudRate(), config.getSerialConfig());
-  dbgln("[wifi] start");
+  dbgln("[wifi] start");// Set Hostname
+  if(config.getHostname().length() > 2) {
+    WiFi.setHostname(config.getHostname().c_str());
+  }
+  // Set WiFi to station mode
   WiFi.mode(WIFI_STA);
+  // Set (reduced) WiFi TX Power
+  dbgln(String("[WiFi] TxPower: ") + ((float)config.getWiFiTXPower()) / 4 + "dBm")
+  WiFi.setTxPower((wifi_power_t) config.getWiFiTXPower()); 
   wm.setClass("invert");
   auto reboot = false;
   wm.setAPCallback([&reboot](WiFiManager *wifiManager){reboot = true;});
