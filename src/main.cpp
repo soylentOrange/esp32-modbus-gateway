@@ -1,6 +1,7 @@
 #include <WiFi.h>
 #include <AsyncTCP.h>
 #include <WiFiManager.h>
+#include <ESPmDNS.h>
 #include <ESPAsyncWebServer.h>
 #include <Preferences.h>
 #include <Logging.h>
@@ -67,8 +68,12 @@ void setup() {
   }  
   MBbridge.start(config.getTcpPort(), 10, config.getTcpTimeout());
   dbgln("[modbus] finished");
+  dbgln("[server] start");
   setupPages(&webServer, MBclient, &MBbridge, &config, &wm);
   webServer.begin();
+  MDNS.begin(WiFi.getHostname());
+  MDNS.addService("http", "tcp", 80);
+  dbgln("[server] finished");
   dbgln("[setup] finished");
 }
 
