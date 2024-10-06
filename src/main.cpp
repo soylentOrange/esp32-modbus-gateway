@@ -16,6 +16,26 @@ Preferences prefs;
 ModbusClientRTU *MBclient;
 ModbusBridgeWiFi MBbridge;
 WiFiManager wm;
+static volatile uint32_t ip_addr(INADDR_NONE);
+
+// Callback for setting up mdns
+void WiFiGotIP(WiFiEvent_t event, WiFiEventInfo_t info) {
+  uint32_t new_ip_addr = IPAddress(info.got_ip.ip_info.ip.addr);
+  dbg("new IP-Address: "); dbgln(IPAddress(new_ip_addr));
+  if(new_ip_addr != ip_addr) {
+    ip_addr = new_ip_addr;
+    dbgln("re-start mDNS");
+    MDNS.begin(WiFi.getHostname());
+    MDNS.addService("http", "tcp", 80);
+  }
+}
+
+// Callback for stopping mdns
+void WiFiLostIP(WiFiEvent_t event, WiFiEventInfo_t info) {
+  dbgln("Lost IP-Address");
+  ip_addr = INADDR_NONE;
+  MDNS.end();
+}
 
 void setup() {
   // Set up debug serial port
@@ -71,9 +91,13 @@ void setup() {
   dbgln("[server] start");
   setupPages(&webServer, MBclient, &MBbridge, &config, &wm);
   webServer.begin();
+  ip_addr = WiFi.localIP();
   MDNS.begin(WiFi.getHostname());
   MDNS.addService("http", "tcp", 80);
   dbgln("[server] finished");
+  // Register Callbacks for re-starting mDNs after reconnect
+  WiFi.onEvent(WiFiLostIP, WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_LOST_IP);  
+  WiFi.onEvent(WiFiGotIP, WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_GOT_IP);  
   dbgln("[setup] finished");
 }
 
