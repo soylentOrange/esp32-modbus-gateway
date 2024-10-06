@@ -9,6 +9,8 @@ Config::Config()
     ,_modbusRtsPin(-1)
     ,_serialBaudRate(115200)
     ,_serialConfig(SERIAL_8N1)
+    ,_WiFiTXPower(60)
+    ,_hostname("na")
 {}
 
 void Config::begin(Preferences *prefs)
@@ -21,6 +23,8 @@ void Config::begin(Preferences *prefs)
     _modbusRtsPin = _prefs->getChar("modbusRtsPin", _modbusRtsPin);
     _serialBaudRate = _prefs->getULong("serialBaudRate", _serialBaudRate);
     _serialConfig = _prefs->getULong("serialConfig", _serialConfig);
+    _WiFiTXPower = _prefs->getChar("txPower", _WiFiTXPower); 
+    _hostname = _prefs->getString("hostname", _hostname);
 }
 
 uint16_t Config::getTcpPort(){
@@ -153,4 +157,23 @@ void Config::setSerialStopBits(uint8_t value){
     if (stopbits == value) return;
     _serialConfig = (_serialConfig & 0xffffffcf) | value;
     _prefs->putULong("serialConfig", _serialConfig);
+}
+String Config::getHostname(){
+    return _hostname;
+}
+
+void Config::setHostname(String value){
+     if (_hostname == value) return;
+    _hostname = value;
+    _prefs->putString("hostname", _hostname);
+}
+
+int8_t Config::getWiFiTXPower(){
+    return _WiFiTXPower;
+}
+
+void Config::setWiFiTXPower(int8_t value){
+     if (_WiFiTXPower == value) return;
+    _WiFiTXPower = value;
+    _prefs->putChar("txPower", _WiFiTXPower);
 }

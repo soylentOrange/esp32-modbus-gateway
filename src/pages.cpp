@@ -22,6 +22,8 @@ void setupPages(AsyncWebServer *server, ModbusClientRTU *rtu, ModbusBridgeWiFi *
     response->print("<table>");
 
     // show ESP infos...
+    sendTableRow(response, "WiFi TX Power (dBm)", String(((float)WiFi.getTxPower())/4, 2));
+    sendTableRow(response, "ESP Temperature (C)", String(temperatureRead(), 2));
     sendTableRow(response, "ESP Uptime (sec)", esp_timer_get_time() / 1000000);
     sendTableRow(response, "ESP SSID", WiFi.SSID());
     sendTableRow(response, "ESP RSSI", WiFi.RSSI());
@@ -63,9 +65,40 @@ void setupPages(AsyncWebServer *server, ModbusClientRTU *rtu, ModbusBridgeWiFi *
   server->on("/config", HTTP_GET, [config](AsyncWebServerRequest *request){
     dbgln("[webserver] GET /config");
     auto *response = request->beginResponseStream("text/html");
-    sendResponseHeader(response, "Modbus TCP");
+    sendResponseHeader(response, "Wifi Settings");
     response->print("<form method=\"post\">");
     response->print("<table>"
+      "<tr>"
+        "<td>"
+          "<label for=\"hn\">Hostname</label>"
+        "</td>"
+        "<td>");
+    response->printf("<input type=\"text\" minlength=\"2\" maxlength=\"63\" id=\"hn\" name=\"hn\" value=\"%s\">", config->getHostname().length() > 2 ? config->getHostname().c_str() : WiFi.getHostname());
+    response->print("</tr>"
+    "</tr>"
+      "<tr>"
+        "<td>"
+          "<label for=\"tx\">TX Power</label>"
+        "</td>"
+        "<td>");
+    response->printf("<select id=\"tx\" name=\"tx\" data-value=\"%d\">", config->getWiFiTXPower());
+    response->print("<option value=\"78\">19.5dBm</option>"
+                    "<option value=\"76\">19dBm</option>"
+                    "<option value=\"74\">18.5dBm</option>"
+                    "<option value=\"68\">17dBm</option>"
+                    "<option value=\"60\">15dBm</option>"
+                    "<option value=\"52\">13dBm</option>"
+                    "<option value=\"44\">11dBm</option>"
+                    "<option value=\"34\">8.5dBm</option>"
+                    "<option value=\"28\">7dBm</option>"
+                    "<option value=\"20\">5dBm</option>"
+                    "<option value=\"8\">2dBm</option>"
+        "</select>"
+      "</td>"
+    "</tr>"
+    "</table>"
+    "<h3>Modbus TCP</h3>"
+    "<table>"
       "<tr>"
         "<td>"
           "<label for=\"tp\">TCP Port</label>"
@@ -191,7 +224,8 @@ void setupPages(AsyncWebServer *server, ModbusClientRTU *rtu, ModbusBridgeWiFi *
             "</select>"
           "</td>"
         "</tr>"
-        "</table>");
+        "<tr><td>&nbsp;</td><td></td></tr>"
+        "</table>");   
     response->print("<button class=\"r\">Save</button>"
       "</form>"
       "<p></p>");
@@ -262,6 +296,19 @@ void setupPages(AsyncWebServer *server, ModbusClientRTU *rtu, ModbusBridgeWiFi *
       auto stop = request->getParam("ss", true)->value().toInt();
       config->setSerialStopBits(stop);
       dbg("[webserver] saved serial stop bits: "); dbgln(stop);
+    }
+    if (request->hasParam("hn", true)){
+      auto hostname = request->getParam("hn", true)->value();
+      config->setHostname(hostname);
+      dbg("[webserver] saved hostname: ");
+      dbgln(config->getHostname());
+    }
+    if (request->hasParam("tx", true)){
+      auto txPower = request->getParam("tx", true)->value().toInt();
+      config->setWiFiTXPower((int8_t)txPower);
+      dbg("[webserver] saved TX Power: ");
+      dbg(((float)config->getWiFiTXPower())/4);
+      dbgln("dBm");
     }
     request->redirect("/");    
   });
