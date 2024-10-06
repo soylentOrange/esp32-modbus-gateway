@@ -17,9 +17,10 @@ ModbusBridgeWiFi MBbridge;
 WiFiManager wm;
 
 void setup() {
+  // Set up debug serial port
   debugSerial.begin(115200);
   dbgln();
-  dbgln("[config] load")
+  dbgln("[config] load");
   prefs.begin("modbusRtuGw");
   config.begin(&prefs);
   debugSerial.end();
