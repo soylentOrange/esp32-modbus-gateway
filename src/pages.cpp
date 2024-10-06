@@ -56,9 +56,9 @@ void setupPages(AsyncWebServer *server, ModbusClientRTU *rtu, ModbusBridgeWiFi *
   server->on("/reboot", HTTP_POST, [](AsyncWebServerRequest *request){
     dbgln("[webserver] POST /reboot");
     request->redirect("/");
-    dbgln("[webserver] rebooting...")
+    dbgln("[webserver] rebooting...");
     ESP.restart();
-    dbgln("[webserver] rebooted...")
+    dbgln("[webserver] rebooted...");
   });
   server->on("/config", HTTP_GET, [config](AsyncWebServerRequest *request){
     dbgln("[webserver] GET /config");
@@ -211,57 +211,57 @@ void setupPages(AsyncWebServer *server, ModbusClientRTU *rtu, ModbusBridgeWiFi *
     if (request->hasParam("tp", true)){
       auto port = request->getParam("tp", true)->value().toInt();
       config->setTcpPort(port);
-      dbgln("[webserver] saved port");
+      dbg("[webserver] saved port: "); dbgln(port);
     }
     if (request->hasParam("tt", true)){
       auto timeout = request->getParam("tt", true)->value().toInt();
       config->setTcpTimeout(timeout);
-      dbgln("[webserver] saved timeout");
+      dbg("[webserver] saved timeout: "); dbgln(timeout);
     }
     if (request->hasParam("mb", true)){
       auto baud = request->getParam("mb", true)->value().toInt();
       config->setModbusBaudRate(baud);
-      dbgln("[webserver] saved modbus baud rate");
+      dbg("[webserver] saved modbus baud rate: "); dbgln(baud);
     }
     if (request->hasParam("md", true)){
       auto data = request->getParam("md", true)->value().toInt();
       config->setModbusDataBits(data);
-      dbgln("[webserver] saved modbus data bits");
+      dbg("[webserver] saved modbus data bits: "); dbgln(data);
     }
     if (request->hasParam("mp", true)){
       auto parity = request->getParam("mp", true)->value().toInt();
       config->setModbusParity(parity);
-      dbgln("[webserver] saved modbus parity");
+      dbg("[webserver] saved modbus parity: "); dbgln(parity);
     }
     if (request->hasParam("ms", true)){
       auto stop = request->getParam("ms", true)->value().toInt();
       config->setModbusStopBits(stop);
-      dbgln("[webserver] saved modbus stop bits");
+      dbg("[webserver] saved modbus stop bits: "); dbgln(stop);
     }
     if (request->hasParam("mr", true)){
       auto rts = request->getParam("mr", true)->value().toInt();
       config->setModbusRtsPin(rts);
-      dbgln("[webserver] saved modbus rts pin");
+      dbg("[webserver] saved modbus rts pin: "); dbgln(rts);
     }
     if (request->hasParam("sb", true)){
       auto baud = request->getParam("sb", true)->value().toInt();
       config->setSerialBaudRate(baud);
-      dbgln("[webserver] saved serial baud rate");
+      dbg("[webserver] saved serial baud rate: "); dbgln(baud);
     }
     if (request->hasParam("sd", true)){
       auto data = request->getParam("sd", true)->value().toInt();
       config->setSerialDataBits(data);
-      dbgln("[webserver] saved serial data bits");
+      dbg("[webserver] saved serial data bits: "); dbgln(data);
     }
     if (request->hasParam("sp", true)){
       auto parity = request->getParam("sp", true)->value().toInt();
       config->setSerialParity(parity);
-      dbgln("[webserver] saved serial parity");
+      dbg("[webserver] saved serial parity: "); dbgln(parity);
     }
     if (request->hasParam("ss", true)){
       auto stop = request->getParam("ss", true)->value().toInt();
       config->setSerialStopBits(stop);
-      dbgln("[webserver] saved serial stop bits");
+      dbg("[webserver] saved serial stop bits: "); dbgln(stop);
     }
     request->redirect("/");    
   });
@@ -356,7 +356,7 @@ void setupPages(AsyncWebServer *server, ModbusClientRTU *rtu, ModbusBridgeWiFi *
       request->send(response);
     }
   }, [&](AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final){
-    dbg("[webserver] OTA progress ");dbgln(index);
+    dbg("[webserver] OTA progress: "); dbgln(index);
     if (!index) {
       //TODO add MD5 Checksum and Update.setMD5
       int cmd = (filename == "filesystem") ? U_SPIFFS : U_FLASH;
@@ -445,7 +445,7 @@ void setupPages(AsyncWebServer *server, ModbusClientRTU *rtu, ModbusBridgeWiFi *
     request->send(response);
   });
   server->onNotFound([](AsyncWebServerRequest *request){
-    dbg("[webserver] request to ");dbg(request->url());dbgln(" not found");
+    dbg("[webserver] request to "); dbg(request->url()); dbgln("not found");
     request->send(404, "text/plain", "404");
   });
 }
