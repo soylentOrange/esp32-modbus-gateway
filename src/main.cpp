@@ -25,10 +25,13 @@ void setup() {
   config.begin(&prefs);
   debugSerial.end();
   debugSerial.begin(config.getSerialBaudRate(), config.getSerialConfig());
-  dbgln("[wifi] start");// Set Hostname
+  dbgln("[wifi] start");
+  // Set Hostname
   if(config.getHostname().length() > 2) {
     WiFi.setHostname(config.getHostname().c_str());
   }
+  // Enable auto-reconnect
+  wm.setWiFiAutoReconnect(true);
   // Set WiFi to station mode
   WiFi.mode(WIFI_STA);
   // Set (reduced) WiFi TX Power
