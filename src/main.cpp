@@ -59,20 +59,16 @@ boolean WiFiConnect() {
 // Callback for reconnecting
 void WiFiLostIP(WiFiEvent_t event, WiFiEventInfo_t info) {
   dbgln("[WiFi] (possibly) disconnected");
+  wm.disconnect();
+  dbgln("[WiFi] trying to reconnect");
+  MDNS.end();
   
-  if(WiFi.status() != WL_CONNECTED) {
-    dbgln("[WiFi] trying to reconnect");
-    MDNS.end();
-    
-    isConnected = false;
-    isConnected = WiFiConnect();
+  isConnected = false;
+  isConnected = WiFiConnect();
 
-    // Start mDNS
-    if(isConnected) {
-      startMDNS(80, config.getTcpPort());
-    }
-  } else {
-    dbgln("[WiFi] actually is connected");
+  // Start mDNS
+  if(isConnected) {
+    startMDNS(80, config.getTcpPort());
   }
 }
 
@@ -113,7 +109,7 @@ void setup() {
 
   // register worker for local Modbus function
   if(skipAddress) {
-    setupLocalModbus(config.getLocalModbusAddress(), &MBbridge, &config, &wm);
+    setupLocalModbus(config.getLocalModbusAddress(), MBclient, &MBbridge, &config, &wm);
   }
 
   // Start Modbus Bridge

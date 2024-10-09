@@ -15,7 +15,8 @@
     void sendButton(AsyncResponseStream *response, const char *title, const char *action, const char *css = "");
     void sendTableRow(AsyncResponseStream *response, const char *name, uint32_t value);
     void sendTableRow(AsyncResponseStream *response, const char *name, String value);
-    void sendDebugForm(AsyncResponseStream *response, String slaveId, String reg, String function, String count);
+    void sendDebugForm_read(AsyncResponseStream *response, String slaveId, String reg, String function, String count);
+    void sendDebugForm_diagnosticSerial(AsyncResponseStream *response, String slaveId, String subFunction, String data);
     void sendMinCss(AsyncResponseStream *response);
     const String ErrorName(Modbus::Error code);
     const String WiFiQuality(int rssiValue);
