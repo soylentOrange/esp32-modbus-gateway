@@ -2,8 +2,13 @@
 #include "localmodbus.h"
 #define ETAG "\"" __DATE__ "" __TIME__ "\""
 
+// Remember last slave-ID
+static uint8_t _lastSlaveID;
+
 void setupPages(AsyncWebServer *server, ModbusClientRTU *rtu, ModbusBridgeWiFi *bridge, Config *config, WiFiManager *wm){
   
+  _lastSlaveID = 1;
+
   server->on("/", HTTP_GET, [](AsyncWebServerRequest *request){
     dbgln("[webserver] GET /");
     auto *response = request->beginResponseStream("text/html");
@@ -26,7 +31,7 @@ void setupPages(AsyncWebServer *server, ModbusClientRTU *rtu, ModbusBridgeWiFi *
 
     // show ESP infos...
     sendTableRow(response, "WiFi TX Power (dBm)", String(((float)WiFi.getTxPower())/4, 2));
-    sendTableRow(response, "ESP Temperature (C)", String(temperatureRead(), 2));
+    sendTableRow(response, "ESP Temperature (°C)", String(temperatureRead(), 2));
     sendTableRow(response, "ESP Uptime (sec)", esp_timer_get_time() / 1000000);
     sendTableRow(response, "ESP SSID", WiFi.SSID());
     sendTableRow(response, "ESP RSSI", WiFi.RSSI());
@@ -369,29 +374,40 @@ void setupPages(AsyncWebServer *server, ModbusClientRTU *rtu, ModbusBridgeWiFi *
   server->on("/debug", HTTP_GET, [](AsyncWebServerRequest *request){
     dbgln("[webserver] GET /debug");
     auto *response = request->beginResponseStream("text/html");
-    sendResponseHeader(response, "Debug - Read from Device");
-    sendDebugForm(response, "1", "1", "3", "1");
-    //sendButton(response, "Read Device", "/read");
+    sendResponseHeader(response, "Modbus Debug");
+    sendButton(response, "Read (FC01 - FC04)", "debug_read");
+    sendButton(response, "Diagnostic Serial (FC08)", "debug_diagnosticSerial");
     sendButton(response, "Back", "/");
     sendResponseTrailer(response);
     request->send(response);
   });
 
-  // server->on("read", HTTP_GET, [](AsyncWebServerRequest *request){
-  //   dbgln("[webserver] GET /read");
-  //   auto *response = request->beginResponseStream("text/html");
-  //   sendResponseHeader(response, "Debug - Read from Device");
-  //   sendDebugForm(response, "1", "1", "3", "1");
-  //   sendButton(response, "Back", "/debug");
-  //   sendResponseTrailer(response);
-  //   request->send(response);
-  // });
+  server->on("/debug_read", HTTP_GET, [](AsyncWebServerRequest *request){
+    dbgln("[webserver] GET /debug_read");
+    auto *response = request->beginResponseStream("text/html");
+    sendResponseHeader(response, "Modbus Debug - Read from Device");
+    sendDebugForm_read(response, String(_lastSlaveID), "1", "3", "1");
+    sendButton(response, "Back", "debug");
+    sendResponseTrailer(response);
+    request->send(response);
+  });
 
-  server->on("/debug", HTTP_POST, [config, rtu, bridge](AsyncWebServerRequest *request){
-    dbgln("[webserver] POST /debug");
+  server->on("/debug_diagnosticSerial", HTTP_GET, [](AsyncWebServerRequest *request){
+    dbgln("[webserver] GET /debug_diagnosticSerial");
+    auto *response = request->beginResponseStream("text/html");
+    sendResponseHeader(response, "Modbus Debug - Diagnostic Serial");
+    sendDebugForm_diagnosticSerial(response, String(_lastSlaveID), "0", "0000");
+    sendButton(response, "Back", "debug");
+    sendResponseTrailer(response);
+    request->send(response);
+  });
+
+  server->on("/debug_read", HTTP_POST, [config, rtu, bridge](AsyncWebServerRequest *request){
+    dbgln("[webserver] POST /debug_read");
     String slaveId = "1";
     if (request->hasParam("slave", true)){
       slaveId = request->getParam("slave", true)->value();
+      _lastSlaveID = (uint8_t) slaveId.toInt();
     }
     String reg = "1";
     if (request->hasParam("reg", true)){
@@ -406,7 +422,7 @@ void setupPages(AsyncWebServer *server, ModbusClientRTU *rtu, ModbusBridgeWiFi *
       count = request->getParam("count", true)->value();
     }
     auto *response = request->beginResponseStream("text/html");
-    sendResponseHeader(response, "Debug - Read from Device");
+    sendResponseHeader(response, "Modbus Debug - Read from Device");
     response->print("<pre>");
     auto previous = LOGDEVICE;
     auto previousLevel = MBUlogLvl;
@@ -444,8 +460,77 @@ void setupPages(AsyncWebServer *server, ModbusClientRTU *rtu, ModbusBridgeWiFi *
     else{
       response->printf("<span class=\"e\">Error: %#02x (%s)</span>", error, ErrorName(error).c_str());
     }
-    sendDebugForm(response, slaveId, reg, func, count);
-    sendButton(response, "Back", "/");
+    sendDebugForm_read(response, slaveId, reg, func, count);
+    sendButton(response, "Back", "debug");
+    sendResponseTrailer(response);
+    request->send(response);
+  });
+
+  server->on("/debug_diagnosticSerial", HTTP_POST, [config, rtu, bridge](AsyncWebServerRequest *request){
+    dbgln("[webserver] POST /debug_diagnosticSerial");
+    String slaveId = "1";
+    if (request->hasParam("slave", true)){
+      slaveId = request->getParam("slave", true)->value();
+      _lastSlaveID = (uint8_t) slaveId.toInt();
+    }
+    String subFunction = "0";
+    if (request->hasParam("sf", true)){
+      subFunction = request->getParam("sf", true)->value();
+    }
+    String data = "0000";
+    if (request->hasParam("dt", true)){
+      data = request->getParam("dt", true)->value();
+    }
+
+    // convert data string to WORD
+    uint16_t dataWord = 0;
+    if(data.length() != 0) {
+      dataWord = (uint16_t) strtol(data.c_str(), NULL, 16);
+    } 
+    
+    auto *response = request->beginResponseStream("text/html");
+    sendResponseHeader(response, "Modbus Debug - Diagnostic Serial");
+    response->print("<pre>");
+    auto previous = LOGDEVICE;
+    auto previousLevel = MBUlogLvl;
+    auto debug = WebPrint(previous, response);
+    LOGDEVICE = &debug;
+    MBUlogLvl = LOG_LEVEL_DEBUG;
+    ModbusMessage answer;
+    // Call local worker (when enabled)
+    if(slaveId.toInt() == config->getLocalModbusAddress() && config->getLocalModbusEnable()) {
+      MBSworker lclWrkr = bridge->getWorker(slaveId.toInt(), DIAGNOSTICS_SERIAL);
+      if(lclWrkr != NULL) {
+        LOG_D("found local worker... calling for response\n");
+        answer = lclWrkr(ModbusMessage(slaveId.toInt(), DIAGNOSTICS_SERIAL, subFunction.toInt(), dataWord));        
+      } else {
+        LOG_D("no local worker found... answering with ILLEGAL_FUNCTION\n");
+        answer.setError(slaveId.toInt(), DIAGNOSTICS_SERIAL, ILLEGAL_FUNCTION);
+      }
+    } else {
+      // Call via RTU
+      answer = rtu->syncRequest(0xdeadbeef, slaveId.toInt(), DIAGNOSTICS_SERIAL, subFunction.toInt(), dataWord);   
+    }    
+    MBUlogLvl = previousLevel;
+    LOGDEVICE = previous;
+    response->print("</pre>");
+    auto error = answer.getError();
+    if (error == SUCCESS){
+      auto count = answer.size() - 2;
+      if(count < 0) {
+        count = 0;
+      }
+      response->print("<span >Answer: 0x");
+      for (size_t i = 0; i < count; i++) {
+        response->printf("%02x", answer[i + 2]);
+      }      
+      response->print("</span>");
+    }
+    else {
+      response->printf("<span class=\"e\">Error: %#02x (%s)</span>", error, ErrorName(error).c_str());
+    }
+    sendDebugForm_diagnosticSerial(response, slaveId, subFunction, data);
+    sendButton(response, "Back", "debug");
     sendResponseTrailer(response);
     request->send(response);
 
@@ -540,6 +625,7 @@ void setupPages(AsyncWebServer *server, ModbusClientRTU *rtu, ModbusBridgeWiFi *
     sendResponseTrailer(response);
     request->send(response);
   });
+
   server->on("/wifi", HTTP_POST, [wm](AsyncWebServerRequest *request){
     dbgln("[webserver] POST /wifi");
     request->redirect("/");
@@ -549,10 +635,12 @@ void setupPages(AsyncWebServer *server, ModbusClientRTU *rtu, ModbusBridgeWiFi *
     ESP.restart();
     dbgln("[webserver] rebooted...");
   });
+
   server->on("/favicon.ico", [](AsyncWebServerRequest *request){
     dbgln("[webserver] GET /favicon.ico");
     request->send(204);//TODO add favicon
   });
+
   server->on("/style.css", [](AsyncWebServerRequest *request){
     if (request->hasHeader("If-None-Match")){
       auto header = request->getHeader("If-None-Match");
@@ -588,6 +676,7 @@ void setupPages(AsyncWebServer *server, ModbusClientRTU *rtu, ModbusBridgeWiFi *
     response->addHeader("ETag", ETAG);
     request->send(response);
   });
+
   server->onNotFound([](AsyncWebServerRequest *request){
     dbg("[webserver] request to "); dbg(request->url()); dbgln("not found");
     request->send(404, "text/plain", "404");
@@ -672,7 +761,55 @@ void sendTableRow(AsyncResponseStream *response, const char *name, uint32_t valu
       "</tr>", name, value);
 }
 
-void sendDebugForm(AsyncResponseStream *response, String slaveId, String reg, String function, String count){
+void sendDebugForm_diagnosticSerial(AsyncResponseStream *response, String slaveId, String subFunction, String data) {
+    response->print("<form method=\"post\">");
+    response->print("<table>"
+      "<tr>"
+        "<td>"
+          "<label for=\"slave\">Slave ID</label>"
+        "</td>"
+        "<td>");
+    response->printf("<input type=\"number\" min=\"0\" max=\"247\" id=\"slave\" name=\"slave\" value=\"%s\">", slaveId.c_str());
+    response->print("</td>"
+        "</tr>"
+        "<tr>"
+          "<td>"
+            "<label for=\"func\">Function</label>"
+          "</td>"
+          "<td>");
+    response->printf("<select id=\"sf\" name=\"sf\" data-value=\"%s\">", subFunction.c_str());
+    response->print("<option value=\"0\">00 Return Query Data</option>"
+              "<option value=\"1\">01 Restart Communications</option>"
+              "<option value=\"2\">02 Return Diagnostic Register</option>"
+              "<option value=\"10\">10 Clear Counters and Diagnostic Register</option>"
+              "<option value=\"11\">11 Return Bus Message Count</option>"
+              "<option value=\"12\">12 Return Bus Communication Error Count</option>" 
+              "<option value=\"14\">14 Return Slave Message Count</option>"             
+            "</select>"
+          "</td>"
+        "</tr>"
+        "<tr>"
+          "<td>"
+            "<label for=\"reg\">Data 0x:</label>"
+          "</td>"
+          "<td>");
+    response->printf("<input type=\"text\" minlength=\"0\" maxlength=\"4\" id=\"dt\" name=\"dt\" value=\"%s\">", data.c_str());
+    response->print("</td>"
+        "</tr>"
+      "</table>");
+    response->print("<button class=\"r\">Make it so</button>"
+      "</form>"
+      "<p></p>");
+    response->print("<script>"
+      "(function(){"
+        "var s = document.querySelectorAll('select[data-value]');"
+        "for(d of s){"
+          "d.querySelector(`option[value='${d.dataset.value}']`).selected=true"
+      "}})();"
+      "</script>");
+}
+
+void sendDebugForm_read(AsyncResponseStream *response, String slaveId, String reg, String function, String count) {
     response->print("<form method=\"post\">");
     response->print("<table>"
       "<tr>"
