@@ -9,6 +9,8 @@
 #include <ModbusClientRTU.h>
 #include "config.h"
 #include "pages.h"
+#include "restapi.h"
+#include "localmodbus.h"
 
 AsyncWebServer webServer(80);
 Config config;
@@ -16,25 +18,62 @@ Preferences prefs;
 ModbusClientRTU *MBclient;
 ModbusBridgeWiFi MBbridge;
 WiFiManager wm;
-static volatile uint32_t ip_addr(INADDR_NONE);
+boolean isConnected(false);
 
-// Callback for setting up mdns
-void WiFiGotIP(WiFiEvent_t event, WiFiEventInfo_t info) {
-  uint32_t new_ip_addr = IPAddress(info.got_ip.ip_info.ip.addr);
-  dbg("new IP-Address: "); dbgln(IPAddress(new_ip_addr));
-  if(new_ip_addr != ip_addr) {
-    ip_addr = new_ip_addr;
-    dbgln("re-start mDNS");
-    MDNS.begin(WiFi.getHostname());
-    MDNS.addService("http", "tcp", 80);
+// Start mDNS for webserver and modbus
+void startMDNS(uint16_t webPort = 80, uint16_t modbusPort = 502) {
+  // start mDNS
+  MDNS.begin(WiFi.getHostname());
+  MDNS.addService("http", "tcp", webPort);
+  MDNS.addService("modbus", "tcp", modbusPort);
+};
+
+// Connect to Wifi
+boolean WiFiConnect() {
+  // Set Hostname
+  if(config.getHostname().length() > 2) {
+    WiFi.setHostname(config.getHostname().c_str());
   }
-}
+  // Set WiFi to station mode
+  WiFi.mode(WIFI_STA);
+  // Set (reduced) WiFi TX Power
+  dbgln(String("[WiFi] TxPower: ") + ((float)config.getWiFiTXPower()) / 4 + "dBm")
+  WiFi.setTxPower((wifi_power_t) config.getWiFiTXPower()); 
+  wm.setClass("invert");
+  auto reboot = false;
+  wm.setAPCallback([&reboot](WiFiManager *wifiManager){reboot = true;});
+  isConnected = wm.autoConnect();
+  if (reboot){
+    ESP.restart();
+  }
+  if(WiFi.getMode() == WIFI_MODE_STA) {
+    dbgln("[WiFi] connected in WIFI_MODE_STA");
+    wm.setWiFiAutoReconnect(false);
+    return true;
+  } else {
+    dbgln("[WiFi] NOT connected in WIFI_MODE_STA");
+    return false;
+  }
+};
 
-// Callback for stopping mdns
+// Callback for reconnecting
 void WiFiLostIP(WiFiEvent_t event, WiFiEventInfo_t info) {
-  dbgln("Lost IP-Address");
-  ip_addr = INADDR_NONE;
-  MDNS.end();
+  dbgln("[WiFi] (possibly) disconnected");
+  
+  if(WiFi.status() != WL_CONNECTED) {
+    dbgln("[WiFi] trying to reconnect");
+    MDNS.end();
+    
+    isConnected = false;
+    isConnected = WiFiConnect();
+
+    // Start mDNS
+    if(isConnected) {
+      startMDNS(80, config.getTcpPort());
+    }
+  } else {
+    dbgln("[WiFi] actually is connected");
+  }
 }
 
 void setup() {
@@ -46,26 +85,9 @@ void setup() {
   config.begin(&prefs);
   debugSerial.end();
   debugSerial.begin(config.getSerialBaudRate(), config.getSerialConfig());
+  dbgln();
   dbgln("[wifi] start");
-  // Set Hostname
-  if(config.getHostname().length() > 2) {
-    WiFi.setHostname(config.getHostname().c_str());
-  }
-  // Enable auto-reconnect
-  wm.setWiFiAutoReconnect(true);
-  // Set WiFi to station mode
-  WiFi.mode(WIFI_STA);
-  // Set (reduced) WiFi TX Power
-  dbgln(String("[WiFi] TxPower: ") + ((float)config.getWiFiTXPower()) / 4 + "dBm")
-  WiFi.setTxPower((wifi_power_t) config.getWiFiTXPower()); 
-  wm.setClass("invert");
-  auto reboot = false;
-  wm.setAPCallback([&reboot](WiFiManager *wifiManager){reboot = true;});
-  wm.autoConnect();
-  if (reboot){
-    ESP.restart();
-  }
-  dbgln("[wifi] finished");
+  isConnected = WiFiConnect();
   dbgln("[modbus] start");
 
   MBUlogLvl = LOG_LEVEL_WARNING;
@@ -80,24 +102,34 @@ void setup() {
 #endif
 
   MBclient = new ModbusClientRTU(config.getModbusRtsPin());
-  MBclient->setTimeout(1000);
+  MBclient->setTimeout(config.getModbusTimeout());
   MBclient->begin(modbusSerial, 1);
-  for (uint8_t i = 1; i < 248; i++)
-  {
-    MBbridge.attachServer(i, i, ANY_FUNCTION_CODE, MBclient);
+  uint8_t skipAddress = (config.getLocalModbusEnable() && config.getLocalModbusAddress() > 0 && config.getLocalModbusAddress() < 248) ? config.getLocalModbusAddress() : 0;
+  for (uint8_t i = 1; i < 248; i++) {
+    if(i != skipAddress) {
+      MBbridge.attachServer(i, i, ANY_FUNCTION_CODE, MBclient);
+    }
   }  
+
+  // register worker for local Modbus function
+  if(skipAddress) {
+    setupLocalModbus(config.getLocalModbusAddress(), &MBbridge, &config, &wm);
+  }
+
+  // Start Modbus Bridge
   MBbridge.start(config.getTcpPort(), 10, config.getTcpTimeout());
-  dbgln("[modbus] finished");
   dbgln("[server] start");
+
+  // Setup the pages for Webserver and Rest api (v1)
   setupPages(&webServer, MBclient, &MBbridge, &config, &wm);
+  setupRestApi(&webServer, MBclient, &MBbridge, &config, &wm);
   webServer.begin();
-  ip_addr = WiFi.localIP();
-  MDNS.begin(WiFi.getHostname());
-  MDNS.addService("http", "tcp", 80);
-  dbgln("[server] finished");
-  // Register Callbacks for re-starting mDNs after reconnect
-  WiFi.onEvent(WiFiLostIP, WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_LOST_IP);  
-  WiFi.onEvent(WiFiGotIP, WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_GOT_IP);  
+
+  // Start mDNS
+  startMDNS(80, config.getTcpPort());
+
+  // Register Callbacks for re-starting mDNs after disconnect
+  WiFi.onEvent(WiFiLostIP, WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_DISCONNECTED); 
   dbgln("[setup] finished");
 }
 

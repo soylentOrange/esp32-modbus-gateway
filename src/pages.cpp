@@ -1,7 +1,9 @@
 #include "pages.h"
+#include "localmodbus.h"
 #define ETAG "\"" __DATE__ "" __TIME__ "\""
 
 void setupPages(AsyncWebServer *server, ModbusClientRTU *rtu, ModbusBridgeWiFi *bridge, Config *config, WiFiManager *wm){
+  
   server->on("/", HTTP_GET, [](AsyncWebServerRequest *request){
     dbgln("[webserver] GET /");
     auto *response = request->beginResponseStream("text/html");
@@ -15,6 +17,7 @@ void setupPages(AsyncWebServer *server, ModbusClientRTU *rtu, ModbusBridgeWiFi *
     sendResponseTrailer(response);
     request->send(response);
   });
+
   server->on("/status", HTTP_GET, [rtu, bridge](AsyncWebServerRequest *request){
     dbgln("[webserver] GET /status");
     auto *response = request->beginResponseStream("text/html");
@@ -30,7 +33,6 @@ void setupPages(AsyncWebServer *server, ModbusClientRTU *rtu, ModbusBridgeWiFi *
     sendTableRow(response, "ESP WiFi Quality", WiFiQuality(WiFi.RSSI()));
     sendTableRow(response, "ESP MAC", WiFi.macAddress());
     sendTableRow(response, "ESP IP",  WiFi.localIP().toString() );
-
     sendTableRow(response, "RTU Messages", rtu->getMessageCount());
     sendTableRow(response, "RTU Pending Messages", rtu->pendingRequests());
     sendTableRow(response, "RTU Errors", rtu->getErrorCount());
@@ -44,6 +46,7 @@ void setupPages(AsyncWebServer *server, ModbusClientRTU *rtu, ModbusBridgeWiFi *
     sendResponseTrailer(response);
     request->send(response);
   });
+
   server->on("/reboot", HTTP_GET, [](AsyncWebServerRequest *request){
     dbgln("[webserver] GET /reboot");
     auto *response = request->beginResponseStream("text/html");
@@ -55,6 +58,7 @@ void setupPages(AsyncWebServer *server, ModbusClientRTU *rtu, ModbusBridgeWiFi *
     sendResponseTrailer(response);
     request->send(response);
   });
+
   server->on("/reboot", HTTP_POST, [](AsyncWebServerRequest *request){
     dbgln("[webserver] POST /reboot");
     request->redirect("/");
@@ -62,6 +66,7 @@ void setupPages(AsyncWebServer *server, ModbusClientRTU *rtu, ModbusBridgeWiFi *
     ESP.restart();
     dbgln("[webserver] rebooted...");
   });
+
   server->on("/config", HTTP_GET, [config](AsyncWebServerRequest *request){
     dbgln("[webserver] GET /config");
     auto *response = request->beginResponseStream("text/html");
@@ -115,6 +120,28 @@ void setupPages(AsyncWebServer *server, ModbusClientRTU *rtu, ModbusBridgeWiFi *
     response->printf("<input type=\"number\" min=\"1\" id=\"tt\" name=\"tt\" value=\"%d\">", config->getTcpTimeout());
     response->print("</td>"
         "</tr>"
+        "</table>"
+        "<h3>Local Modbus Server</h3>"
+        "<table>"
+          "<tr>"
+            "<td>"
+              "<label for=\"re\">Enable local Modbus Server</label>"
+            "</td>"
+            "<td>");
+    response->printf("<select id=\"re\" name=\"re\" data-value=\"%d\">", config->getLocalModbusEnable());  
+    response->print("<option value=\"0\">disabled</option>"
+              "<option value=\"1\">enabled</option>"
+              "</select>"
+            "</td>"
+          "</tr>"
+          "<tr>"
+            "<td>"
+              "<label for=\"ra\">Local Modbus Address</label>"
+            "</td>"
+          "<td>");
+    response->printf("<input type=\"number\" min=\"1\" max=\"247\" id=\"ra\" name=\"ra\" value=\"%d\">", config->getLocalModbusAddress());
+    response->print("</td>"
+          "</tr>"
         "</table>"
         "<h3>Modbus RTU</h3>"
         "<table>"
@@ -181,6 +208,14 @@ void setupPages(AsyncWebServer *server, ModbusClientRTU *rtu, ModbusBridgeWiFi *
             "</select>"
           "</td>"
         "</tr>"
+        "<tr>"
+        "<td>"
+          "<label for=\"mt\">Modbus Timeout (ms)</label>"
+        "</td>"
+        "<td>");
+    response->printf("<input type=\"number\" min=\"1\" id=\"mt\" name=\"mt\" value=\"%d\">", config->getModbusTimeout());
+    response->print("</td>"
+        "</tr>"
         "</table>"
         "<h3>Serial (Debug)</h3>"
         "<table>"
@@ -240,6 +275,7 @@ void setupPages(AsyncWebServer *server, ModbusClientRTU *rtu, ModbusBridgeWiFi *
     sendResponseTrailer(response);
     request->send(response);
   });
+
   server->on("/config", HTTP_POST, [config](AsyncWebServerRequest *request){
     dbgln("[webserver] POST /config");
     if (request->hasParam("tp", true)){
@@ -250,7 +286,7 @@ void setupPages(AsyncWebServer *server, ModbusClientRTU *rtu, ModbusBridgeWiFi *
     if (request->hasParam("tt", true)){
       auto timeout = request->getParam("tt", true)->value().toInt();
       config->setTcpTimeout(timeout);
-      dbg("[webserver] saved timeout: "); dbgln(timeout);
+      dbg("[webserver] saved tcp timeout: "); dbgln(timeout);
     }
     if (request->hasParam("mb", true)){
       auto baud = request->getParam("mb", true)->value().toInt();
@@ -276,6 +312,11 @@ void setupPages(AsyncWebServer *server, ModbusClientRTU *rtu, ModbusBridgeWiFi *
       auto rts = request->getParam("mr", true)->value().toInt();
       config->setModbusRtsPin(rts);
       dbg("[webserver] saved modbus rts pin: "); dbgln(rts);
+    }
+    if (request->hasParam("mt", true)){
+      auto timeout = request->getParam("mt", true)->value().toInt();
+      config->setModbusTimeout(timeout);
+      dbg("[webserver] saved Modbus timeout: "); dbgln(timeout);
     }
     if (request->hasParam("sb", true)){
       auto baud = request->getParam("sb", true)->value().toInt();
@@ -309,19 +350,44 @@ void setupPages(AsyncWebServer *server, ModbusClientRTU *rtu, ModbusBridgeWiFi *
       dbg("[webserver] saved TX Power: ");
       dbg(((float)config->getWiFiTXPower())/4);
       dbgln("dBm");
+    }        
+    if (request->hasParam("re", true)){
+      auto enabled = request->getParam("re", true)->value().toInt();
+      config->setLocalModbusEnable((uint8_t) enabled);
+      dbg("[webserver] saved local Modbus server enable: ");
+      dbgln((uint8_t) enabled);
+    }
+    if (request->hasParam("ra", true)){
+      auto address = request->getParam("ra", true)->value().toInt();
+      config->setLocalModbusAddress((uint8_t) address);
+      dbg("[webserver] saved local Modbus server address: ");
+      dbgln((uint8_t) address);
     }
     request->redirect("/");    
   });
+
   server->on("/debug", HTTP_GET, [](AsyncWebServerRequest *request){
     dbgln("[webserver] GET /debug");
     auto *response = request->beginResponseStream("text/html");
-    sendResponseHeader(response, "Debug");
+    sendResponseHeader(response, "Debug - Read from Device");
     sendDebugForm(response, "1", "1", "3", "1");
+    //sendButton(response, "Read Device", "/read");
     sendButton(response, "Back", "/");
     sendResponseTrailer(response);
     request->send(response);
   });
-  server->on("/debug", HTTP_POST, [rtu](AsyncWebServerRequest *request){
+
+  // server->on("read", HTTP_GET, [](AsyncWebServerRequest *request){
+  //   dbgln("[webserver] GET /read");
+  //   auto *response = request->beginResponseStream("text/html");
+  //   sendResponseHeader(response, "Debug - Read from Device");
+  //   sendDebugForm(response, "1", "1", "3", "1");
+  //   sendButton(response, "Back", "/debug");
+  //   sendResponseTrailer(response);
+  //   request->send(response);
+  // });
+
+  server->on("/debug", HTTP_POST, [config, rtu, bridge](AsyncWebServerRequest *request){
     dbgln("[webserver] POST /debug");
     String slaveId = "1";
     if (request->hasParam("slave", true)){
@@ -340,14 +406,28 @@ void setupPages(AsyncWebServer *server, ModbusClientRTU *rtu, ModbusBridgeWiFi *
       count = request->getParam("count", true)->value();
     }
     auto *response = request->beginResponseStream("text/html");
-    sendResponseHeader(response, "Debug");
+    sendResponseHeader(response, "Debug - Read from Device");
     response->print("<pre>");
     auto previous = LOGDEVICE;
     auto previousLevel = MBUlogLvl;
     auto debug = WebPrint(previous, response);
     LOGDEVICE = &debug;
     MBUlogLvl = LOG_LEVEL_DEBUG;
-    ModbusMessage answer = rtu->syncRequest(0xdeadbeef, slaveId.toInt(), func.toInt(), reg.toInt(), count.toInt());
+    ModbusMessage answer;
+    // Call local worker (when enabled)
+    if(slaveId.toInt() == config->getLocalModbusAddress() && config->getLocalModbusEnable()) {
+      MBSworker lclWrkr = bridge->getWorker(slaveId.toInt(), func.toInt());
+      if(lclWrkr != NULL) {
+        LOG_D("found local worker... calling for response\n");
+        answer = lclWrkr(ModbusMessage(slaveId.toInt(), func.toInt(), reg.toInt(), count.toInt()));
+      } else {
+        LOG_D("no local worker found... answering with ILLEGAL_FUNCTION\n");
+        answer.setError(slaveId.toInt(), func.toInt(), ILLEGAL_FUNCTION);
+      }
+    } else {
+      // Call via RTU
+      answer = rtu->syncRequest(0xdeadbeef, slaveId.toInt(), func.toInt(), reg.toInt(), count.toInt());
+    }    
     MBUlogLvl = previousLevel;
     LOGDEVICE = previous;
     response->print("</pre>");
@@ -368,7 +448,22 @@ void setupPages(AsyncWebServer *server, ModbusClientRTU *rtu, ModbusBridgeWiFi *
     sendButton(response, "Back", "/");
     sendResponseTrailer(response);
     request->send(response);
+
+    // reset when requested
+    if(config->getLocalModbusEnable()) {
+      if(slaveId.toInt() == config->getLocalModbusAddress()) {
+        if(answer.getFunctionCode() == DIAGNOSTICS_SERIAL) {
+          uint16_t subFunctionCode;   // Sub-function code
+          answer.get(2, subFunctionCode);
+          if(subFunctionCode == RESTART_COMMUNICATION_OPTION) {
+            dbgln("[webserver] rebooting...");
+            ESP.restart();
+          }
+        }
+      }
+    }    
   });
+
   server->on("/update", HTTP_GET, [](AsyncWebServerRequest *request){
     dbgln("[webserver] GET /update");
     auto *response = request->beginResponseStream("text/html");
@@ -383,6 +478,7 @@ void setupPages(AsyncWebServer *server, ModbusClientRTU *rtu, ModbusBridgeWiFi *
     sendResponseTrailer(response);
     request->send(response);
   });
+
   server->on("/update", HTTP_POST, [](AsyncWebServerRequest *request){
     request->onDisconnect([](){
       ESP.restart();
@@ -427,6 +523,7 @@ void setupPages(AsyncWebServer *server, ModbusClientRTU *rtu, ModbusBridgeWiFi *
       return;
     }
   });
+
   server->on("/wifi", HTTP_GET, [](AsyncWebServerRequest *request){
     dbgln("[webserver] GET /wifi");
     auto *response = request->beginResponseStream("text/html");
