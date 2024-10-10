@@ -534,19 +534,19 @@ void setupPages(AsyncWebServer *server, ModbusClientRTU *rtu, ModbusBridgeWiFi *
     sendResponseTrailer(response);
     request->send(response);
 
-    // reset when requested
-    if(config->getLocalModbusEnable()) {
-      if(slaveId.toInt() == config->getLocalModbusAddress()) {
-        if(answer.getFunctionCode() == DIAGNOSTICS_SERIAL) {
-          uint16_t subFunctionCode;   // Sub-function code
-          answer.get(2, subFunctionCode);
-          if(subFunctionCode == RESTART_COMMUNICATION_OPTION) {
-            dbgln("[webserver] rebooting...");
-            ESP.restart();
-          }
-        }
-      }
-    }    
+    // // reset when requested
+    // if(config->getLocalModbusEnable()) {
+    //   if(slaveId.toInt() == config->getLocalModbusAddress()) {
+    //     if(answer.getFunctionCode() == DIAGNOSTICS_SERIAL) {
+    //       uint16_t subFunctionCode;   // Sub-function code
+    //       answer.get(2, subFunctionCode);
+    //       if(subFunctionCode == RESTART_COMMUNICATION_OPTION) {
+    //         dbgln("[webserver] rebooting...");
+    //         ESP.restart();
+    //       }
+    //     }
+    //   }
+    // }    
   });
 
   server->on("/update", HTTP_GET, [](AsyncWebServerRequest *request){
@@ -796,6 +796,7 @@ void sendDebugForm_diagnosticSerial(AsyncResponseStream *response, String slaveI
     response->printf("<input type=\"text\" minlength=\"0\" maxlength=\"4\" id=\"dt\" name=\"dt\" value=\"%s\">", data.c_str());
     response->print("</td>"
         "</tr>"
+        "<tr><td>&nbsp;</td><td></td></tr>"
       "</table>");
     response->print("<button class=\"r\">Make it so</button>"
       "</form>"
@@ -849,8 +850,9 @@ void sendDebugForm_read(AsyncResponseStream *response, String slaveId, String re
     response->printf("<input type=\"number\" min=\"0\" max=\"65535\" id=\"count\" name=\"count\" value=\"%s\">", count.c_str());
     response->print("</td>"
         "</tr>"
+        "<tr><td>&nbsp;</td><td></td></tr>"
       "</table>");
-    response->print("<button class=\"r\">Send</button>"
+    response->print("<button class=\"r\">Make it so</button>"
       "</form>"
       "<p></p>");
     response->print("<script>"

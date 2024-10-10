@@ -23,16 +23,29 @@ boolean isConnected(false);
 // Start mDNS for webserver and modbus
 void startMDNS(uint16_t webPort = 80, uint16_t modbusPort = 502) {
   // start mDNS
-  MDNS.begin(WiFi.getHostname());
-  MDNS.addService("http", "tcp", webPort);
-  MDNS.addService("modbus", "tcp", modbusPort);
+  if(!MDNS.begin(WiFi.getHostname())) {
+    dbgln("[WiFi] failed to start mDNS");
+    return;
+  }
+  if(!MDNS.addService("http", "tcp", webPort)) {
+    dbgln("[WiFi] failed to add service for http");
+    return;
+  }
+  if(!MDNS.addService("modbus", "tcp", modbusPort)) {
+    dbgln("[WiFi] failed to add service for modbus");
+    return;
+  }
 };
 
 // Connect to Wifi
 boolean WiFiConnect() {
   // Set Hostname
+  dbg("[WiFi] Hostname: ")
   if(config.getHostname().length() > 2) {
     WiFi.setHostname(config.getHostname().c_str());
+    dbgln(config.getHostname());
+  } else {
+    dbgln(WiFi.getHostname());
   }
   // Set WiFi to station mode
   WiFi.mode(WIFI_STA);
@@ -47,11 +60,11 @@ boolean WiFiConnect() {
     ESP.restart();
   }
   if(WiFi.getMode() == WIFI_MODE_STA) {
-    dbgln("[WiFi] connected in WIFI_MODE_STA");
+    dbgln("[WiFi] connected to AP");
     wm.setWiFiAutoReconnect(false);
     return true;
   } else {
-    dbgln("[WiFi] NOT connected in WIFI_MODE_STA");
+    dbgln("[WiFi] NOT connected");
     return false;
   }
 };
@@ -59,11 +72,11 @@ boolean WiFiConnect() {
 // Callback for reconnecting
 void WiFiLostIP(WiFiEvent_t event, WiFiEventInfo_t info) {
   dbgln("[WiFi] (possibly) disconnected");
-  wm.disconnect();
-  dbgln("[WiFi] trying to reconnect");
   MDNS.end();
+  wm.disconnect();
   
-  isConnected = false;
+  // reconnect to AP
+  dbgln("[WiFi] trying to reconnect");
   isConnected = WiFiConnect();
 
   // Start mDNS
@@ -124,8 +137,8 @@ void setup() {
   // Start mDNS
   startMDNS(80, config.getTcpPort());
 
-  // Register Callbacks for re-starting mDNs after disconnect
-  WiFi.onEvent(WiFiLostIP, WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_DISCONNECTED); 
+  // Register Callback for re-starting mDNs after disconnect
+  WiFi.onEvent(WiFiLostIP, WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_LOST_IP); 
   dbgln("[setup] finished");
 }
 

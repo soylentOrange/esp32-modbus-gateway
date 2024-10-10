@@ -1,9 +1,16 @@
 #include "localmodbus.h"
+#include <esp_task_wdt.h>
 #define ETAG "\"" __DATE__ "" __TIME__ "\""
 
 static ModbusClientRTU* _rtu = NULL;
 static ModbusBridgeWiFi* _bridge = NULL;
 
+// FreeRTOS-task to pause some time and then reboot
+void rebootAfterDelay(void * parameter){
+    vTaskDelay((uint32_t) parameter / portTICK_PERIOD_MS);
+    ESP.restart();
+    vTaskDelete(NULL);  // will probably not be reached...
+}
 
 // FC03: worker do serve Modbus function code 0x03 (READ_HOLD_REGISTER)
 ModbusMessage FC03(ModbusMessage request) {
@@ -11,7 +18,7 @@ ModbusMessage FC03(ModbusMessage request) {
     uint16_t words;             // requested number of registers
     ModbusMessage response;     // response message to be sent back
 
-    LOG_D("WORKER CALLED FC03");
+    LOG_D("Worker for FC03\n");
 
     // get request values
     request.get(2, address);
@@ -38,7 +45,7 @@ ModbusMessage FC08(ModbusMessage request) {
     ModbusMessage response;     // response message to be sent back
     uint16_t resultWord = 0;
 
-    LOG_D("WORKER CALLED FC08\n");
+    LOG_D("Worker for FC08\n");
 
     // get request values
     request.get(2, subFunctionCode);
@@ -51,9 +58,13 @@ ModbusMessage FC08(ModbusMessage request) {
         case RESTART_COMMUNICATION_OPTION:
             LOG_D("Restart Communications Option\n");
             response = request; 
+            // create a task to reboot
+            xTaskCreate(rebootAfterDelay, "rebootAfterDelay", configMINIMAL_STACK_SIZE, 
+                (void*) 1000, // delay for 1000 ms
+                1, NULL);
             break;
         case CLEAR_COUNTERS_AND_DIAGNOSTIC_REGISTER:
-            LOG_D("Restart Communications Option\n");
+            LOG_D("Clear Counters and Diagnostic Register\n");
             if(_rtu != NULL) {
                 _rtu->resetCounts();
             }
@@ -65,21 +76,21 @@ ModbusMessage FC08(ModbusMessage request) {
         case RETURN_BUS_MESSAGE_COUNT:
             LOG_D("Return Bus Message Count\n");
             if(_bridge != NULL) {
-                resultWord = _bridge->getMessageCount();
+                resultWord = (uint16_t) _bridge->getMessageCount();
             }
             response = ModbusMessage(request.getServerID(), DIAGNOSTICS_SERIAL, RETURN_BUS_MESSAGE_COUNT, resultWord);
             break;
         case RETURN_BUS_COMMUNICATION_ERROR_COUNT:
             LOG_D("Return Bus Communication Error Count\n");
             if(_bridge != NULL) {
-                resultWord = _bridge->getErrorCount();
+                resultWord = (uint16_t) _bridge->getErrorCount();
             }
             response = ModbusMessage(request.getServerID(), DIAGNOSTICS_SERIAL, RETURN_BUS_COMMUNICATION_ERROR_COUNT, resultWord);
             break;
         case RETURN_SLAVE_MESSAGE_COUNT:
             LOG_D("Return Slave Message Count\n");
             if(_rtu != NULL) {
-                resultWord = _rtu->getMessageCount();
+                resultWord = (uint16_t) _rtu->getMessageCount();
             }
             response = ModbusMessage(request.getServerID(), DIAGNOSTICS_SERIAL, RETURN_SLAVE_MESSAGE_COUNT, resultWord);
             break;
@@ -92,8 +103,8 @@ ModbusMessage FC08(ModbusMessage request) {
 }
 
 void setupLocalModbus(uint8_t serverID, ModbusClientRTU *rtu, ModbusBridgeWiFi *bridge, Config *config, WiFiManager *wm) {
-    String EfuseMac = String(ESP.getEfuseMac(), 16);
-    dbgln(EfuseMac);
+    // String EfuseMac = String(ESP.getEfuseMac(), 16);
+    // dbgln(EfuseMac);
     _rtu = rtu;
     _bridge = bridge;
     bridge->registerWorker(serverID, READ_HOLD_REGISTER, &FC03);
