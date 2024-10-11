@@ -1,5 +1,6 @@
 #include "localmodbus.h"
-#include <esp_task_wdt.h>
+#include <pins_arduino.h>
+#include "pins_d1_mini.h"
 #define ETAG "\"" __DATE__ "" __TIME__ "\""
 
 static ModbusClientRTU* _rtu = NULL;
@@ -43,7 +44,7 @@ ModbusMessage FC03(ModbusMessage request) {
 ModbusMessage FC08(ModbusMessage request) {
     uint16_t subFunctionCode;   // Sub-function code
     ModbusMessage response;     // response message to be sent back
-    uint16_t resultWord = 0;
+    uint16_t resultWord = 0;    // response data to be sent back
 
     LOG_D("Worker for FC08\n");
 
@@ -109,5 +110,4 @@ void setupLocalModbus(uint8_t serverID, ModbusClientRTU *rtu, ModbusBridgeWiFi *
     _bridge = bridge;
     bridge->registerWorker(serverID, READ_HOLD_REGISTER, &FC03);
     bridge->registerWorker(serverID, DIAGNOSTICS_SERIAL, &FC08);
-    //bridge->registerWorker(serverID, REPORT_SERVER_ID_SERIAL, &FC08);
 }

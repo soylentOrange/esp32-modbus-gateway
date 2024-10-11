@@ -516,13 +516,13 @@ void setupPages(AsyncWebServer *server, ModbusClientRTU *rtu, ModbusBridgeWiFi *
     response->print("</pre>");
     auto error = answer.getError();
     if (error == SUCCESS){
-      auto count = answer.size() - 2;
+      auto count = answer.size() - 4;
       if(count < 0) {
         count = 0;
       }
       response->print("<span >Answer: 0x");
       for (size_t i = 0; i < count; i++) {
-        response->printf("%02x", answer[i + 2]);
+        response->printf("%02x", answer[i + 4]);
       }      
       response->print("</span>");
     }
@@ -533,20 +533,6 @@ void setupPages(AsyncWebServer *server, ModbusClientRTU *rtu, ModbusBridgeWiFi *
     sendButton(response, "Back", "debug");
     sendResponseTrailer(response);
     request->send(response);
-
-    // // reset when requested
-    // if(config->getLocalModbusEnable()) {
-    //   if(slaveId.toInt() == config->getLocalModbusAddress()) {
-    //     if(answer.getFunctionCode() == DIAGNOSTICS_SERIAL) {
-    //       uint16_t subFunctionCode;   // Sub-function code
-    //       answer.get(2, subFunctionCode);
-    //       if(subFunctionCode == RESTART_COMMUNICATION_OPTION) {
-    //         dbgln("[webserver] rebooting...");
-    //         ESP.restart();
-    //       }
-    //     }
-    //   }
-    // }    
   });
 
   server->on("/update", HTTP_GET, [](AsyncWebServerRequest *request){
