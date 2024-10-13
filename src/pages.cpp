@@ -14,7 +14,8 @@ void setupPages(AsyncWebServer *server, ModbusClientRTU *rtu, ModbusBridgeWiFi *
     auto *response = request->beginResponseStream("text/html");
     sendResponseHeader(response, "Main");
     sendButton(response, "Status", "status");
-    sendButton(response, "Config", "config");
+    sendButton(response, "General Config", "config");
+    sendButton(response, "Config Local Modbus Server", "config_local");
     sendButton(response, "Debug", "debug");
     sendButton(response, "Firmware update", "update");
     sendButton(response, "WiFi reset", "wifi", "r");
@@ -126,28 +127,6 @@ void setupPages(AsyncWebServer *server, ModbusClientRTU *rtu, ModbusBridgeWiFi *
     response->print("</td>"
         "</tr>"
         "</table>"
-        "<h3>Local Modbus Server</h3>"
-        "<table>"
-          "<tr>"
-            "<td>"
-              "<label for=\"re\">Enable local Modbus Server</label>"
-            "</td>"
-            "<td>");
-    response->printf("<select id=\"re\" name=\"re\" data-value=\"%d\">", config->getLocalModbusEnable());  
-    response->print("<option value=\"0\">disabled</option>"
-              "<option value=\"1\">enabled</option>"
-              "</select>"
-            "</td>"
-          "</tr>"
-          "<tr>"
-            "<td>"
-              "<label for=\"ra\">Local Modbus Address</label>"
-            "</td>"
-          "<td>");
-    response->printf("<input type=\"number\" min=\"1\" max=\"247\" id=\"ra\" name=\"ra\" value=\"%d\">", config->getLocalModbusAddress());
-    response->print("</td>"
-          "</tr>"
-        "</table>"
         "<h3>Modbus RTU</h3>"
         "<table>"
         "<tr>"
@@ -197,19 +176,19 @@ void setupPages(AsyncWebServer *server, ModbusClientRTU *rtu, ModbusBridgeWiFi *
           "<td>");
     response->printf("<select id=\"mr\" name=\"mr\" data-value=\"%d\">", config->getModbusRtsPin());
     response->print("<option value=\"-1\">Auto</option>"
-              "<option value=\"4\">D4</option>"
-              "<option value=\"13\">D13</option>"
-              "<option value=\"14\">D14</option>"
-              "<option value=\"18\">D18</option>"
-              "<option value=\"19\">D19</option>"
-              "<option value=\"21\">D21</option>"
-              "<option value=\"22\">D22</option>"
-              "<option value=\"23\">D23</option>"
-              "<option value=\"25\">D25</option>"
-              "<option value=\"26\">D26</option>"
-              "<option value=\"27\">D27</option>"
-              "<option value=\"32\">D32</option>"
-              "<option value=\"33\">D33</option>"
+              "<option value=\"4\">GPIO4</option>"
+              "<option value=\"13\">GPIO13</option>"
+              "<option value=\"14\">GPIO14</option>"
+              "<option value=\"18\">GPIO18</option>"
+              "<option value=\"19\">GPIO19</option>"
+              "<option value=\"21\">GPIO21</option>"
+              "<option value=\"22\">GPIO22</option>"
+              "<option value=\"23\">GPIO23</option>"
+              "<option value=\"25\">GPIO25</option>"
+              "<option value=\"26\">GPIO26</option>"
+              "<option value=\"27\">GPIO27</option>"
+              "<option value=\"32\">GPIO32</option>"
+              "<option value=\"33\">GPIO33</option>"
             "</select>"
           "</td>"
         "</tr>"
@@ -355,7 +334,292 @@ void setupPages(AsyncWebServer *server, ModbusClientRTU *rtu, ModbusBridgeWiFi *
       dbg("[webserver] saved TX Power: ");
       dbg(((float)config->getWiFiTXPower())/4);
       dbgln("dBm");
-    }        
+    } 
+    request->redirect("/");    
+  });
+
+  server->on("/config_local", HTTP_GET, [config](AsyncWebServerRequest *request){
+    dbgln("[webserver] GET /config_local");
+    auto *response = request->beginResponseStream("text/html");
+    sendResponseHeader(response, "Local Modbus Server");
+    response->print("<form method=\"post\">");
+    response->print("<table>"
+          "<tr>"
+            "<td>"
+              "<label for=\"re\">Enable local Modbus Server</label>"
+            "</td>"
+            "<td>");
+    response->printf("<select id=\"re\" name=\"re\" data-value=\"%d\">", config->getLocalModbusEnable());  
+    response->print("<option value=\"0\">disabled</option>"
+              "<option value=\"1\">enabled</option>"
+              "</select>"
+            "</td>"
+          "</tr>"
+          "<tr>"
+            "<td>"
+              "<label for=\"ra\">Local Modbus Address</label>"
+            "</td>"
+          "<td>");
+    response->printf("<input type=\"number\" min=\"1\" max=\"247\" id=\"ra\" name=\"ra\" value=\"%d\">", config->getLocalModbusAddress());
+    response->print("</td>"
+          "</tr>"
+        "</table>"
+        "<h3>Coils</h3>"
+        "<table>"
+          "<tr>"
+            "<td>"
+              "<label for=\"c1\">Coil 1</label>"
+            "</td>"
+            "<td>");  
+    response->printf("<select id=\"c1\" name=\"c1\" data-value=\"%d\">", config->getCoilPin(0));  
+    sendGPIOOptions(response);
+    response->printf("</td><td><select id=\"c1m\" name=\"c1m\" data-value=\"%d\">", config->getCoilPinMode(0));  
+    response->print("<option value=\"0\">disabled</option>"
+              "<option value=\"3\">Output</option>"
+              "<option value=\"19\">Open drain</option>"
+              "</select>"
+            "</td>"
+          "</tr>"
+          "<tr>"
+            "<td>"
+              "<label for=\"c2\">Coil 2</label>"
+            "</td>"
+            "<td>");
+    response->printf("<select id=\"c2\" name=\"c2\" data-value=\"%d\">", config->getCoilPin(1));  
+    sendGPIOOptions(response);
+    response->printf("</td><td><select id=\"c2m\" name=\"c2m\" data-value=\"%d\">", config->getCoilPinMode(1));  
+    response->print("<option value=\"0\">disabled</option>"
+              "<option value=\"3\">Output</option>"
+              "<option value=\"19\">Open drain</option>"
+              "</select>"
+            "</td>"
+          "</tr>"
+          "<tr>"
+            "<td>"
+              "<label for=\"c3\">Coil 3</label>"
+            "</td>"
+            "<td>");
+    response->printf("<select id=\"c3\" name=\"c3\" data-value=\"%d\">", config->getCoilPin(2));  
+    sendGPIOOptions(response);
+    response->printf("</td><td><select id=\"c3m\" name=\"c3m\" data-value=\"%d\">", config->getCoilPinMode(2));  
+    response->print("<option value=\"0\">disabled</option>"
+              "<option value=\"3\">Output</option>"
+              "<option value=\"19\">Open drain</option>"
+              "</select>"
+            "</td>"
+          "</tr>"
+          "<tr>"
+            "<td>"
+              "<label for=\"c4\">Coil 4</label>"
+            "</td>"
+            "<td>");
+    response->printf("<select id=\"c4\" name=\"c4\" data-value=\"%d\">", config->getCoilPin(3));  
+    sendGPIOOptions(response);
+    response->printf("</td><td><select id=\"c4m\" name=\"c4m\" data-value=\"%d\">", config->getCoilPinMode(3));  
+    response->print("<option value=\"0\">disabled</option>"
+              "<option value=\"3\">Output</option>"
+              "<option value=\"19\">Open drain</option>"
+              "</select>"
+            "</td>"
+          "</tr>"
+          "<tr>"
+            "<td>"
+              "<label for=\"c5\">Coil 5</label>"
+            "</td>"
+            "<td>");
+    response->printf("<select id=\"c5\" name=\"c5\" data-value=\"%d\">", config->getCoilPin(4));  
+    sendGPIOOptions(response);
+    response->printf("</td><td><select id=\"c5m\" name=\"c5m\" data-value=\"%d\">", config->getCoilPinMode(4));  
+    response->print("<option value=\"0\">disabled</option>"
+              "<option value=\"3\">Output</option>"
+              "<option value=\"19\">Open drain</option>"
+              "</select>"
+            "</td>"
+          "</tr>"
+          "<tr>"
+            "<td>"
+              "<label for=\"c3\">Coil 6</label>"
+            "</td>"
+            "<td>");
+    response->printf("<select id=\"c6\" name=\"c6\" data-value=\"%d\">", config->getCoilPin(5));  
+    sendGPIOOptions(response);
+    response->printf("</td><td><select id=\"c6m\" name=\"c6m\" data-value=\"%d\">", config->getCoilPinMode(5));  
+    response->print("<option value=\"0\">disabled</option>"
+              "<option value=\"3\">Output</option>"
+              "<option value=\"19\">Open drain</option>"
+              "</select>"
+            "</td>"
+          "</tr>"
+          "<tr>"
+            "<td>"
+              "<label for=\"c7\">Coil 7</label>"
+            "</td>"
+            "<td>");
+    response->printf("<select id=\"c7\" name=\"c7\" data-value=\"%d\">", config->getCoilPin(6));  
+    sendGPIOOptions(response);
+    response->printf("</td><td><select id=\"c7m\" name=\"c7m\" data-value=\"%d\">", config->getCoilPinMode(6));  
+    response->print("<option value=\"0\">disabled</option>"
+              "<option value=\"3\">Output</option>"
+              "<option value=\"19\">Open drain</option>"
+              "</select>"
+            "</td>"
+          "</tr>"
+          "<tr>"
+            "<td>"
+              "<label for=\"c3\">Coil 8</label>"
+            "</td>"
+            "<td>");
+    response->printf("<select id=\"c8\" name=\"c8\" data-value=\"%d\">", config->getCoilPin(7));  
+    sendGPIOOptions(response);
+    response->printf("</td><td><select id=\"c8m\" name=\"c8m\" data-value=\"%d\">", config->getCoilPinMode(7));  
+    response->print("<option value=\"0\">disabled</option>"
+              "<option value=\"3\">Output</option>"
+              "<option value=\"19\">Open drain</option>"
+              "</select>"
+            "</td>"
+          "</tr>" 
+        "</table>"     
+        "<h3>Inputs</h3>"
+        "<table>"
+          "<tr>"
+            "<td>"
+              "<label for=\"i1\">Input 1</label>"
+            "</td>"
+            "<td>");  
+    response->printf("<select id=\"i1\" name=\"i1\" data-value=\"%d\">", config->getInputPin(0));  
+    sendGPIOOptions(response);
+    response->printf("</td><td><select id=\"i1m\" name=\"i1m\" data-value=\"%d\">", config->getInputPinMode(0));  
+    response->print("<option value=\"0\">disabled</option>"
+              "<option value=\"1\">Input</option>"
+              "<option value=\"5\">Pullup</option>"
+              "<option value=\"9\">Pulldown</option>"
+              "</select>"
+            "</td>"
+          "</tr>"   
+          "<tr>"
+            "<td>"
+              "<label for=\"i2\">Input 2</label>"
+            "</td>"
+            "<td>"); 
+    response->printf("<select id=\"i2\" name=\"i2\" data-value=\"%d\">", config->getInputPin(1));  
+    sendGPIOOptions(response);
+    response->printf("</td><td><select id=\"i2m\" name=\"i2m\" data-value=\"%d\">", config->getInputPinMode(1));  
+    response->print("<option value=\"0\">disabled</option>"
+              "<option value=\"1\">Input</option>"
+              "<option value=\"5\">Pullup</option>"
+              "<option value=\"9\">Pulldown</option>"
+              "</select>"
+            "</td>"
+          "</tr>"   
+          "<tr>"
+            "<td>"
+              "<label for=\"i3\">Input 3</label>"
+            "</td>"
+            "<td>"); 
+    response->printf("<select id=\"i3\" name=\"i3\" data-value=\"%d\">", config->getInputPin(2));  
+    sendGPIOOptions(response);
+    response->printf("</td><td><select id=\"i3m\" name=\"i3m\" data-value=\"%d\">", config->getInputPinMode(2));  
+    response->print("<option value=\"0\">disabled</option>"
+              "<option value=\"1\">Input</option>"
+              "<option value=\"5\">Pullup</option>"
+              "<option value=\"9\">Pulldown</option>"
+              "</select>"
+            "</td>"
+          "</tr>"   
+          "<tr>"
+            "<td>"
+              "<label for=\"i4\">Input 4</label>"
+            "</td>"
+            "<td>"); 
+    response->printf("<select id=\"i4\" name=\"i4\" data-value=\"%d\">", config->getInputPin(3));  
+    sendGPIOOptions(response);
+    response->printf("</td><td><select id=\"i4m\" name=\"i4m\" data-value=\"%d\">", config->getInputPinMode(3));  
+    response->print("<option value=\"0\">disabled</option>"
+              "<option value=\"1\">Input</option>"
+              "<option value=\"5\">Pullup</option>"
+              "<option value=\"9\">Pulldown</option>"
+              "</select>"
+            "</td>"
+          "</tr>"   
+          "<tr>"
+            "<td>"
+              "<label for=\"i5\">Input 5</label>"
+            "</td>"
+            "<td>"); 
+    response->printf("<select id=\"i5\" name=\"i5\" data-value=\"%d\">", config->getInputPin(4));  
+    sendGPIOOptions(response);
+    response->printf("</td><td><select id=\"i5m\" name=\"i5m\" data-value=\"%d\">", config->getInputPinMode(4));  
+    response->print("<option value=\"0\">disabled</option>"
+              "<option value=\"1\">Input</option>"
+              "<option value=\"5\">Pullup</option>"
+              "<option value=\"9\">Pulldown</option>"
+              "</select>"
+            "</td>"
+          "</tr>"   
+          "<tr>"
+            "<td>"
+              "<label for=\"i6\">Input 6</label>"
+            "</td>"
+            "<td>"); 
+    response->printf("<select id=\"i6\" name=\"i6\" data-value=\"%d\">", config->getInputPin(5));  
+    sendGPIOOptions(response);
+    response->printf("</td><td><select id=\"i6m\" name=\"i6m\" data-value=\"%d\">", config->getInputPinMode(5));  
+    response->print("<option value=\"0\">disabled</option>"
+              "<option value=\"1\">Input</option>"
+              "<option value=\"5\">Pullup</option>"
+              "<option value=\"9\">Pulldown</option>"
+              "</select>"
+            "</td>"
+          "</tr>"   
+          "<tr>"
+            "<td>"
+              "<label for=\"i7\">Input 7</label>"
+            "</td>"
+            "<td>"); 
+    response->printf("<select id=\"i7\" name=\"i7\" data-value=\"%d\">", config->getInputPin(6));  
+    sendGPIOOptions(response);
+    response->printf("</td><td><select id=\"i7m\" name=\"i7m\" data-value=\"%d\">", config->getInputPinMode(6));  
+    response->print("<option value=\"0\">disabled</option>"
+              "<option value=\"1\">Input</option>"
+              "<option value=\"5\">Pullup</option>"
+              "<option value=\"9\">Pulldown</option>"
+              "</select>"
+            "</td>"
+          "</tr>"   
+          "<tr>"
+            "<td>"
+              "<label for=\"i8\">Input 8</label>"
+            "</td>"
+            "<td>"); 
+    response->printf("<select id=\"i8\" name=\"i8\" data-value=\"%d\">", config->getInputPin(7));  
+    sendGPIOOptions(response);
+    response->printf("</td><td><select id=\"i8m\" name=\"i8m\" data-value=\"%d\">", config->getInputPinMode(7));  
+    response->print("<option value=\"0\">disabled</option>"
+              "<option value=\"1\">Input</option>"
+              "<option value=\"5\">Pullup</option>"
+              "<option value=\"9\">Pulldown</option>"
+              "</select>"
+            "</td>");
+    response->print("</tr>"
+        "<tr><td>&nbsp;</td><td></td></tr>"
+        "</table>"); 
+    response->print("<button class=\"r\">Save</button>"
+      "</form>"
+      "<p></p>");
+    sendButton(response, "Back", "/");
+    response->print("<script>"
+      "(function(){"
+        "var s = document.querySelectorAll('select[data-value]');"
+        "for(d of s){"
+          "d.querySelector(`option[value='${d.dataset.value}']`).selected=true"
+      "}})();"
+      "</script>");
+    sendResponseTrailer(response);
+    request->send(response);
+  });
+
+  server->on("/config_local", HTTP_POST, [config](AsyncWebServerRequest *request){
+    dbgln("[webserver] POST /config_local");
     if (request->hasParam("re", true)){
       auto enabled = request->getParam("re", true)->value().toInt();
       config->setLocalModbusEnable((uint8_t) enabled);
@@ -368,6 +632,168 @@ void setupPages(AsyncWebServer *server, ModbusClientRTU *rtu, ModbusBridgeWiFi *
       dbg("[webserver] saved local Modbus server address: ");
       dbgln((uint8_t) address);
     }
+
+    uint8_t coilCount = 0;
+
+    if (request->hasParam("c1", true)){
+      auto pin = request->getParam("c1", true)->value().toInt();
+      config->setCoilPin(0, (uint8_t) pin);
+    }
+    if (request->hasParam("c2", true)){
+      auto pin = request->getParam("c2", true)->value().toInt();
+      config->setCoilPin(1, (uint8_t) pin);
+    }
+    if (request->hasParam("c3", true)){
+      auto pin = request->getParam("c3", true)->value().toInt();
+      config->setCoilPin(2, (uint8_t) pin);
+    }
+    if (request->hasParam("c4", true)){
+      auto pin = request->getParam("c4", true)->value().toInt();
+      config->setCoilPin(3, (uint8_t) pin);
+    }
+    if (request->hasParam("c5", true)){
+      auto pin = request->getParam("c5", true)->value().toInt();
+      config->setCoilPin(4, (uint8_t) pin);
+    }
+    if (request->hasParam("c6", true)){
+      auto pin = request->getParam("c6", true)->value().toInt();
+      config->setCoilPin(5, (uint8_t) pin);
+    }
+    if (request->hasParam("c7", true)){
+      auto pin = request->getParam("c7", true)->value().toInt();
+      config->setCoilPin(6, (uint8_t) pin);
+    }
+    if (request->hasParam("c8", true)){
+      auto pin = request->getParam("c8", true)->value().toInt();
+      config->setCoilPin(7, (uint8_t) pin);
+    }
+
+    if (request->hasParam("c1m", true)){
+      auto pin = request->getParam("c1m", true)->value().toInt();
+      config->setCoilPinMode(0, (uint8_t) pin);
+      if(pin != 0) coilCount = max((uint8_t) 1, coilCount);
+    }
+    if (request->hasParam("c2m", true)){
+      auto pin = request->getParam("c2m", true)->value().toInt();
+      config->setCoilPinMode(1, (uint8_t) pin);
+      if(pin != 0) coilCount = max((uint8_t) 2, coilCount);
+    }
+    if (request->hasParam("c3m", true)){
+      auto pin = request->getParam("c3m", true)->value().toInt();
+      config->setCoilPinMode(2, (uint8_t) pin);
+      if(pin != 0) coilCount = max((uint8_t) 3, coilCount);
+    }
+    if (request->hasParam("c4m", true)){
+      auto pin = request->getParam("c4m", true)->value().toInt();
+      config->setCoilPinMode(3, (uint8_t) pin);
+      if(pin != 0) coilCount = max((uint8_t) 4, coilCount);
+    }
+    if (request->hasParam("c5m", true)){
+      auto pin = request->getParam("c5m", true)->value().toInt();
+      config->setCoilPinMode(4, (uint8_t) pin);
+      if(pin != 0) coilCount = max((uint8_t) 5, coilCount);
+    }
+    if (request->hasParam("c6m", true)){
+      auto pin = request->getParam("c6m", true)->value().toInt();
+      config->setCoilPinMode(5, (uint8_t) pin);
+      if(pin != 0) coilCount = max((uint8_t) 6, coilCount);
+    }
+    if (request->hasParam("c7m", true)){
+      auto pin = request->getParam("c7m", true)->value().toInt();
+      config->setCoilPinMode(6, (uint8_t) pin);
+      if(pin != 0) coilCount = max((uint8_t) 7, coilCount);
+    }
+    if (request->hasParam("c8m", true)){
+      auto pin = request->getParam("c8m", true)->value().toInt();
+      config->setCoilPinMode(7, (uint8_t) pin);
+      if(pin != 0) coilCount = max((uint8_t) 8, coilCount);
+    }
+
+    // store number of coils
+    config->setCoilPinCount(coilCount);
+    config->saveCoils();
+
+    uint8_t intputCount = 0;
+
+    if (request->hasParam("i1", true)){
+      auto pin = request->getParam("i1", true)->value().toInt();
+      config->setInputPin(0, (uint8_t) pin);
+    }
+    if (request->hasParam("i2", true)){
+      auto pin = request->getParam("i2", true)->value().toInt();
+      config->setInputPin(1, (uint8_t) pin);
+    }
+    if (request->hasParam("i3", true)){
+      auto pin = request->getParam("i3", true)->value().toInt();
+      config->setInputPin(2, (uint8_t) pin);
+    }
+    if (request->hasParam("i4", true)){
+      auto pin = request->getParam("i4", true)->value().toInt();
+      config->setInputPin(3, (uint8_t) pin);
+    }
+    if (request->hasParam("i5", true)){
+      auto pin = request->getParam("i5", true)->value().toInt();
+      config->setInputPin(4, (uint8_t) pin);
+    }
+    if (request->hasParam("i6", true)){
+      auto pin = request->getParam("i6", true)->value().toInt();
+      config->setInputPin(5, (uint8_t) pin);
+    }
+    if (request->hasParam("i7", true)){
+      auto pin = request->getParam("i7", true)->value().toInt();
+      config->setInputPin(6, (uint8_t) pin);
+    }
+    if (request->hasParam("i8", true)){
+      auto pin = request->getParam("i8", true)->value().toInt();
+      config->setInputPin(7, (uint8_t) pin);
+    }
+
+    if (request->hasParam("i1m", true)){
+      auto pin = request->getParam("i1m", true)->value().toInt();
+      config->setInputPinMode(0, (uint8_t) pin);
+      if(pin != 0) intputCount = max((uint8_t) 1, intputCount);
+    }
+    if (request->hasParam("i2m", true)){
+      auto pin = request->getParam("i2m", true)->value().toInt();
+      config->setInputPinMode(1, (uint8_t) pin);
+      if(pin != 0) intputCount = max((uint8_t) 2, intputCount);
+    }
+    if (request->hasParam("i3m", true)){
+      auto pin = request->getParam("i3m", true)->value().toInt();
+      config->setInputPinMode(2, (uint8_t) pin);
+      if(pin != 0) intputCount = max((uint8_t) 3, intputCount);
+    }
+    if (request->hasParam("i4m", true)){
+      auto pin = request->getParam("i4m", true)->value().toInt();
+      config->setInputPinMode(3, (uint8_t) pin);
+      if(pin != 0) intputCount = max((uint8_t) 4, intputCount);
+    }
+    if (request->hasParam("i5m", true)){
+      auto pin = request->getParam("i5m", true)->value().toInt();
+      config->setInputPinMode(4, (uint8_t) pin);
+      if(pin != 0) intputCount = max((uint8_t) 5, intputCount);
+    }
+    if (request->hasParam("i6m", true)){
+      auto pin = request->getParam("i6m", true)->value().toInt();
+      config->setInputPinMode(5, (uint8_t) pin);
+      if(pin != 0) intputCount = max((uint8_t) 6, intputCount);
+    }
+    if (request->hasParam("i7m", true)){
+      auto pin = request->getParam("i7m", true)->value().toInt();
+      config->setInputPinMode(6, (uint8_t) pin);
+      if(pin != 0) intputCount = max((uint8_t) 7, intputCount);
+    }
+    if (request->hasParam("i8m", true)){
+      auto pin = request->getParam("i8m", true)->value().toInt();
+      config->setInputPinMode(7, (uint8_t) pin);
+      if(pin != 0) intputCount = max((uint8_t) 8, intputCount);
+    }
+
+    // store number of coils
+    config->setInputPinCount(intputCount);
+    config->saveInputs();
+
+
     request->redirect("/");    
   });
 
@@ -448,16 +874,21 @@ void setupPages(AsyncWebServer *server, ModbusClientRTU *rtu, ModbusBridgeWiFi *
     LOGDEVICE = previous;
     response->print("</pre>");
     auto error = answer.getError();
-    if (error == SUCCESS){
+    if (error == SUCCESS) {
       auto count = answer[2];
-      response->print("<span >Answer: 0x");
-      for (size_t i = 0; i < count; i++)
-      {
+      response->print("<span>Answer: 0x");
+      for (size_t i = 0; i < count; i++) {
+        if(i > 0 && i%2 == 0) response->printf(" ");
         response->printf("%02x", answer[i + 3]);
       }      
       response->print("</span>");
-    }
-    else{
+      // give answer as float (when 4 bytes have been received)
+      if(count == 4) {
+        float fAnswer;
+        answer.get(3, fAnswer, 0);
+        response->printf("<br><span>(float: %f)</span>", fAnswer);
+      }
+    } else { 
       response->printf("<span class=\"e\">Error: %#02x (%s)</span>", error, ErrorName(error).c_str());
     }
     sendDebugForm_read(response, slaveId, reg, func, count);
@@ -515,7 +946,7 @@ void setupPages(AsyncWebServer *server, ModbusClientRTU *rtu, ModbusBridgeWiFi *
     LOGDEVICE = previous;
     response->print("</pre>");
     auto error = answer.getError();
-    if (error == SUCCESS){
+    if (error == SUCCESS) {
       auto count = answer.size() - 4;
       if(count < 0) {
         count = 0;
@@ -669,7 +1100,7 @@ void setupPages(AsyncWebServer *server, ModbusClientRTU *rtu, ModbusBridgeWiFi *
   });
 }
 
-void sendMinCss(AsyncResponseStream *response){
+void sendMinCss(AsyncResponseStream *response) {
   response->print("body{"    
       "font-family:sans-serif;"
 	    "text-align: center;"
@@ -696,7 +1127,7 @@ void sendMinCss(AsyncResponseStream *response){
     "}");
 }
 
-void sendResponseHeader(AsyncResponseStream *response, const char *title, bool inlineStyle){
+void sendResponseHeader(AsyncResponseStream *response, const char *title, bool inlineStyle) {
     response->print("<!DOCTYPE html>"
       "<html lang=\"en\" class=\"\">"
       "<head>"
@@ -719,11 +1150,11 @@ void sendResponseHeader(AsyncResponseStream *response, const char *title, bool i
     response->print("<div id=\"content\">");
 }
 
-void sendResponseTrailer(AsyncResponseStream *response){
+void sendResponseTrailer(AsyncResponseStream *response) {
     response->print("</div></body></html>");
 }
 
-void sendButton(AsyncResponseStream *response, const char *title, const char *action, const char *css){
+void sendButton(AsyncResponseStream *response, const char *title, const char *action, const char *css) {
     response->printf(
       "<form method=\"get\" action=\"%s\">"
         "<button class=\"%s\">%s</button>"
@@ -731,7 +1162,7 @@ void sendButton(AsyncResponseStream *response, const char *title, const char *ac
       "<p></p>", action, css, title);
 }
 
-void sendTableRow(AsyncResponseStream *response, const char *name, String value){
+void sendTableRow(AsyncResponseStream *response, const char *name, String value) {
     response->printf(
       "<tr>"
         "<td>%s:</td>"
@@ -739,12 +1170,31 @@ void sendTableRow(AsyncResponseStream *response, const char *name, String value)
       "</tr>", name, value.c_str());
 }
 
-void sendTableRow(AsyncResponseStream *response, const char *name, uint32_t value){
+void sendTableRow(AsyncResponseStream *response, const char *name, uint32_t value) {
     response->printf(
       "<tr>"
         "<td>%s:</td>"
         "<td>%d</td>"
       "</tr>", name, value);
+}
+
+void sendGPIOOptions(AsyncResponseStream *response) {
+  response->print("<option value=\"0\">disabled</option>"
+              "<option value=\"2\">GPIO2</option>"
+              "<option value=\"4\">GPIO4</option>"
+              "<option value=\"13\">GPIO13</option>"
+              "<option value=\"14\">GPIO14</option>"
+              "<option value=\"18\">GPIO18</option>"
+              "<option value=\"19\">GPIO19</option>"
+              "<option value=\"21\">GPIO21</option>"
+              "<option value=\"22\">GPIO22</option>"
+              "<option value=\"23\">GPIO23</option>"
+              "<option value=\"25\">GPIO25</option>"
+              "<option value=\"26\">GPIO26</option>"
+              "<option value=\"27\">GPIO27</option>"
+              "<option value=\"32\">GPIO32</option>"
+              "<option value=\"33\">GPIO33</option>"
+              "</select>");
 }
 
 void sendDebugForm_diagnosticSerial(AsyncResponseStream *response, String slaveId, String subFunction, String data) {
@@ -822,7 +1272,7 @@ void sendDebugForm_read(AsyncResponseStream *response, String slaveId, String re
         "</tr>"
         "<tr>"
           "<td>"
-            "<label for=\"reg\">Register</label>"
+            "<label for=\"reg\">Register/Address</label>"
           "</td>"
           "<td>");
     response->printf("<input type=\"number\" min=\"0\" max=\"65535\" id=\"reg\" name=\"reg\" value=\"%s\">", reg.c_str());

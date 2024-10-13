@@ -3,8 +3,8 @@
 Config::Config()
     :_prefs(NULL)
     ,_tcpPort(502)
-    ,_tcpTimeout(10000)
-    ,_modbusTimeout(1000)
+    ,_tcpTimeout(60000)
+    ,_modbusTimeout(900)
     ,_modbusBaudRate(9600)
     ,_modbusConfig(SERIAL_8N1)
     ,_modbusRtsPin(-1)
@@ -13,7 +13,11 @@ Config::Config()
     ,_WiFiTXPower(60)
     ,_localMbEnable(0)
     ,_localMbAddress(247)
-    ,_hostname("na")
+    ,_hostname("modbusRtuGw")
+    ,_coilPinCount(0)
+    ,_inputPinCount(0)
+    ,_coilPinsTouched(false)
+    ,_inputPinsTouched(false)
 {}
 
 void Config::begin(Preferences *prefs)
@@ -31,6 +35,84 @@ void Config::begin(Preferences *prefs)
     _localMbEnable = _prefs->getUChar("localMbEn", _localMbEnable); 
     _localMbAddress = _prefs->getUChar("localMbAdd", _localMbAddress); 
     _hostname = _prefs->getString("hostname", _hostname);
+
+    // read coil configs
+    _coilPins.resize(MAX_COIL_PINS, 0);
+    _coilPinModes.resize(MAX_COIL_PINS, 0);
+    _coilPinCount = _prefs->getBytesLength("coilPins");
+    if(_coilPinCount > 0 && _coilPinCount <= MAX_COIL_PINS) {
+        uint8_t* coilPinsPos = _coilPins.data();
+        _prefs->getBytes("coilPins", coilPinsPos, _coilPinCount);
+    } 
+    #ifdef LED_BUILTIN
+    // when prefs are empty use LED_BUILTIN when available
+    else if(_coilPinCount == 0) {
+        _coilPinCount = 1;
+        _coilPins[0] = LED_BUILTIN;
+    }
+    #endif
+
+    auto coilPinModesLength = _prefs->getBytesLength("coilPinModes");
+    if(coilPinModesLength == _coilPinCount) {
+        uint8_t* coilPinModesPos = _coilPinModes.data();
+        _prefs->getBytes("coilPinModes", coilPinModesPos, _coilPinCount);
+    } 
+    #ifdef LED_BUILTIN
+    // when prefs are empty use LED_BUILTIN when available
+    else if(coilPinModesLength == 0 && _coilPinCount == 1) {
+        _coilPinModes[0] = OUTPUT;
+    }
+    #endif
+    else {
+        _coilPinCount = 0;
+        for(uint8_t i = 0; i < MAX_COIL_PINS; i++) {
+            _coilPins[i] = 0;
+            _coilPinModes[i] = 0;
+        }
+    }
+
+    // get number of valid coils
+    _coilPinCount = 0;
+    for(uint8_t i = 0; i < MAX_COIL_PINS; i++) {
+        if(_coilPinModes[i] == OUTPUT || _coilPinModes[i] == OUTPUT_OPEN_DRAIN) {
+            _coilPinCount = max(_coilPinCount,  (uint8_t) (i + 1));
+        } else {
+            _coilPinModes[i] = 0;
+        }
+    }
+
+    // read input configs
+    _inputPins.resize(MAX_INPUT_PINS, 0);
+    _inputPinModes.resize(MAX_INPUT_PINS, 0);
+    _inputPinCount = _prefs->getBytesLength("inputPins");
+    if(_inputPinCount > 0 && _inputPinCount <= MAX_INPUT_PINS) {
+        uint8_t* inputPinsPos = _inputPins.data();
+        _prefs->getBytes("inputPins", inputPinsPos, _inputPinCount);
+    }
+
+    auto inputPinModesLength = _prefs->getBytesLength("inputPinModes");
+    if(inputPinModesLength == _inputPinCount) {
+        uint8_t* inputPinModesPos = _inputPinModes.data();
+        _prefs->getBytes("inputPinModes", inputPinModesPos, _inputPinCount);
+    } else {
+        _inputPinCount = 0;
+        for(uint8_t i = 0; i < MAX_INPUT_PINS; i++) {
+            _inputPins[i] = 0;
+            _inputPinModes[i] = 0;
+        }
+    }
+
+    // get number of valid inputs
+    _inputPinCount = 0;
+    for(uint8_t i = 0; i < MAX_INPUT_PINS; i++) {
+        if(_inputPinModes[i] == INPUT || 
+            _inputPinModes[i] == INPUT_PULLUP ||
+            _inputPinModes[i] == INPUT_PULLDOWN) {
+            _inputPinCount = max(_inputPinCount, (uint8_t) (i + 1));
+        } else {
+            _inputPinModes[i] = 0;
+        }
+    }
 }
 
 uint16_t Config::getTcpPort(){
@@ -212,4 +294,106 @@ void Config::setLocalModbusEnable(uint8_t value){
      if (_localMbEnable == value) return;
     _localMbEnable = value;
     _prefs->putUChar("localMbEn", _localMbEnable);
+}
+
+uint8_t Config::getCoilPinMode(uint8_t coil) {
+    if(coil >= MAX_COIL_PINS ) return 0;
+    return _coilPinModes[coil];
+}
+
+uint8_t Config::getInputPinMode(uint8_t input) {
+    if(input >= MAX_INPUT_PINS ) return 0;
+    return _inputPinModes[input];
+}
+
+uint8_t Config::getCoilPin(uint8_t coil) {
+    if(coil >= MAX_COIL_PINS ) return 0;
+    return _coilPins[coil];
+}
+
+uint8_t Config::getInputPin(uint8_t input) {
+    if(input >= MAX_INPUT_PINS ) return 0;
+    return _inputPins[input];
+}
+
+uint8_t Config::getCoilPinCount() {
+    return _coilPinCount;
+}
+
+uint8_t Config::getInputPinCount() {
+    return _inputPinCount;
+}
+
+void Config::setCoilPinCount(uint8_t count) {
+    if(count >= 0 && count <= MAX_COIL_PINS) {
+        _coilPinCount = count;
+        _coilPinsTouched = true;
+        if(count < MAX_COIL_PINS) {
+            for(uint8_t i = _coilPinCount; i < MAX_INPUT_PINS; i++) {
+                _coilPins[i] = 0;
+                _coilPinModes[i] = 0;
+            }
+        }
+    }
+}
+
+void Config::setInputPinCount(uint8_t count) {
+    if(count >= 0 && count <= MAX_INPUT_PINS) {
+        _inputPinCount = count;
+        _inputPinsTouched = true;
+        if(count < MAX_INPUT_PINS) {
+            for(uint8_t i = _inputPinCount; i < MAX_INPUT_PINS; i++) {
+                _inputPins[i] = 0;
+                _inputPinModes[i] = 0;
+            }
+        }
+    }
+}
+
+void Config::setCoilPinMode(uint8_t coil, uint8_t mode) {
+    if(coil >= MAX_COIL_PINS ) return;
+    if(_coilPinModes[coil] == mode) return;
+    _coilPinModes[coil] = mode;
+    _coilPinsTouched = true;
+}
+
+void Config::setInputPinMode(uint8_t input, uint8_t mode) {
+    if(input >= MAX_INPUT_PINS ) return;
+    if(_inputPinModes[input] == mode) return;
+    _inputPinModes[input] = mode;
+    _inputPinsTouched = true;
+}
+
+void Config::setCoilPin(uint8_t coil, uint8_t pin) {
+    if(coil >= MAX_COIL_PINS ) return;
+    if(_coilPins[coil] == pin) return;
+    _coilPins[coil] = pin;
+    _coilPinsTouched = true;
+}
+
+void Config::setInputPin(uint8_t input, uint8_t pin) {
+    if(input >= MAX_INPUT_PINS ) return;
+    if(_inputPins[input] == pin) return;
+    _inputPins[input] = pin;
+    _inputPinsTouched = true;
+}
+
+void Config::saveInputs() {
+    if(_inputPinsTouched) {
+        uint8_t* inputPinModesPos = _inputPinModes.data();
+        _prefs->putBytes("inputPinModes", inputPinModesPos, MAX_INPUT_PINS);
+        uint8_t* inputPinsPos = _inputPins.data();
+        _prefs->putBytes("inputPins", inputPinsPos, MAX_INPUT_PINS);
+        _inputPinsTouched = false;
+    }
+}
+
+void Config::saveCoils() {
+    if(_coilPinsTouched) {
+        uint8_t* coilPinModesPos = _coilPinModes.data();
+        _prefs->putBytes("coilPinModes", coilPinModesPos, MAX_COIL_PINS);
+        uint8_t* coilPinsPos = _coilPins.data();
+        _prefs->putBytes("coilPins", coilPinsPos, MAX_COIL_PINS);
+        _coilPinsTouched = false;
+    }
 }

@@ -19,4 +19,6 @@ enum SubFunctionCode : uint16_t {
 };
 
 void setupLocalModbus(uint8_t serverID, ModbusClientRTU *rtu, ModbusBridgeWiFi *bridge, Config *config, WiFiManager *wm);
+void enableCoilWorkers();
+void enableInputWorkers();
 #endif /* LOCALMODBUS_H */

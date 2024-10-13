@@ -39,11 +39,14 @@ void startMDNS(uint16_t webPort = 80, uint16_t modbusPort = 502) {
 
 // Connect to Wifi
 boolean WiFiConnect() {
+  // catch border case where we still might be connected
+  wm.disconnect();
+
   // Set Hostname
   dbg("[WiFi] Hostname: ")
   if(config.getHostname().length() > 2) {
     WiFi.setHostname(config.getHostname().c_str());
-    dbgln(config.getHostname());
+    dbgln(WiFi.getHostname());
   } else {
     dbgln(WiFi.getHostname());
   }
@@ -56,12 +59,12 @@ boolean WiFiConnect() {
   auto reboot = false;
   wm.setAPCallback([&reboot](WiFiManager *wifiManager){reboot = true;});
   isConnected = wm.autoConnect();
-  if (reboot){
+  if(reboot) {
     ESP.restart();
   }
   if(WiFi.getMode() == WIFI_MODE_STA) {
     dbgln("[WiFi] connected to AP");
-    wm.setWiFiAutoReconnect(false);
+    wm.setWiFiAutoReconnect(true);
     return true;
   } else {
     dbgln("[WiFi] NOT connected");
@@ -69,20 +72,23 @@ boolean WiFiConnect() {
   }
 };
 
-// Callback for reconnecting
-void WiFiLostIP(WiFiEvent_t event, WiFiEventInfo_t info) {
-  dbgln("[WiFi] (possibly) disconnected");
+// Callback for re-starting mDNS
+void WiFiGotIP(WiFiEvent_t event, WiFiEventInfo_t info) {
+  dbgln("[WiFi] got IP");
   MDNS.end();
-  wm.disconnect();
-  
-  // reconnect to AP
-  dbgln("[WiFi] trying to reconnect");
-  isConnected = WiFiConnect();
 
   // Start mDNS
   if(isConnected) {
     startMDNS(80, config.getTcpPort());
   }
+}
+
+// Response filter worker to handle RTU timeouts (respond with GATEWAY_TARGET_NO_RESP Exception)
+ModbusMessage timeoutResponseFilter(ModbusMessage request) {
+    if(request.getError() == TIMEOUT) {
+      request.setError(request.getServerID(), request.getFunctionCode(), GATEWAY_TARGET_NO_RESP);
+    } 
+    return request;
 }
 
 void setup() {
@@ -117,8 +123,9 @@ void setup() {
   for (uint8_t i = 1; i < 248; i++) {
     if(i != skipAddress) {
       MBbridge.attachServer(i, i, ANY_FUNCTION_CODE, MBclient);
+      MBbridge.addResponseFilter(i, &timeoutResponseFilter);
     }
-  }  
+  }    
 
   // register worker for local Modbus function
   if(skipAddress) {
@@ -127,9 +134,9 @@ void setup() {
 
   // Start Modbus Bridge
   MBbridge.start(config.getTcpPort(), 10, config.getTcpTimeout());
-  dbgln("[server] start");
-
+  
   // Setup the pages for Webserver and Rest api (v1)
+  dbgln("[server] start");
   setupPages(&webServer, MBclient, &MBbridge, &config, &wm);
   setupRestApi(&webServer, MBclient, &MBbridge, &config, &wm);
   webServer.begin();
@@ -137,8 +144,47 @@ void setup() {
   // Start mDNS
   startMDNS(80, config.getTcpPort());
 
-  // Register Callback for re-starting mDNs after disconnect
-  WiFi.onEvent(WiFiLostIP, WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_LOST_IP); 
+  // Register Callback for (re-)starting mDNs after connect
+  WiFi.onEvent(WiFiGotIP, WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_GOT_IP); 
+
+  if(config.getLocalModbusEnable()) {
+    dbgln("[GPIO] set Pin Modes");
+
+    // define output pins of coils
+    uint8_t coilPinCount = config.getCoilPinCount();
+    if(coilPinCount > 0) {
+      for (size_t i = 0; i < coilPinCount; i++) {
+        dbg("coil "); dbg(i+1); dbg(" Pin: ");
+        dbg(config.getCoilPin(i));
+        dbg(" mode: "); dbgln(config.getCoilPinMode(i));
+        if(config.getCoilPinMode(i) == OUTPUT || config.getCoilPinMode(i) == OUTPUT_OPEN_DRAIN) {
+          pinMode(config.getCoilPin(i), config.getCoilPinMode(i));
+        }
+      } 
+
+      // Register Workers for reading and writing coils 
+      enableCoilWorkers();
+    }
+
+    // define input pins of discrete inputs
+    uint8_t inputPinCount = config.getInputPinCount();
+    if(inputPinCount > 0) {
+      for (size_t i = 0; i < inputPinCount; i++) {
+        dbg("input "); dbg(i+1); dbg(" Pin: ");
+        dbg(config.getInputPin(i));
+        dbg(" mode: "); dbgln(config.getInputPinMode(i));
+        if(config.getInputPinMode(i) == INPUT ||
+          config.getInputPinMode(i) == INPUT_PULLUP ||
+          config.getInputPinMode(i) == INPUT_PULLDOWN) {
+          pinMode(config.getInputPin(i), config.getInputPinMode(i));
+        }
+      }
+
+      // Register Workers for reading and inputs 
+      enableInputWorkers(); 
+    }
+  }
+  
   dbgln("[setup] finished");
 }
 

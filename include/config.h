@@ -1,9 +1,11 @@
 #ifndef CONFIG_H
     #define CONFIG_H
-    #include <Arduino.h>
-    #include <Preferences.h>
+    #include <Preferences.h>                   
+    #include <vector>
     #define debugSerial Serial
     #define modbusSerial Serial2
+    #define MAX_INPUT_PINS 8
+    #define MAX_COIL_PINS 8
     #define DEBUG
 
     class Config{
@@ -21,6 +23,14 @@
             uint8_t _localMbEnable;
             uint8_t _localMbAddress;
             String _hostname;
+            uint8_t _coilPinCount;
+            uint8_t _inputPinCount;
+            bool _coilPinsTouched;
+            bool _inputPinsTouched;
+            std::vector<uint8_t> _coilPins; 
+            std::vector<uint8_t> _coilPinModes; 
+            std::vector<uint8_t> _inputPins; 
+            std::vector<uint8_t> _inputPinModes; 
         public:
             Config();
             void begin(Preferences *prefs);
@@ -58,6 +68,20 @@
             void setLocalModbusAddress(uint8_t value);
             String getHostname();
             void setHostname(String value);
+            uint8_t getCoilPinMode(uint8_t coil);
+            uint8_t getInputPinMode(uint8_t input);
+            uint8_t getCoilPin(uint8_t coil);
+            uint8_t getInputPin(uint8_t input);
+            uint8_t getCoilPinCount();
+            uint8_t getInputPinCount();
+            void setCoilPinCount(uint8_t count);
+            void setInputPinCount(uint8_t count);
+            void setCoilPinMode(uint8_t coil, uint8_t mode);
+            void setInputPinMode(uint8_t input, uint8_t mode);
+            void setCoilPin(uint8_t coil, uint8_t pin);
+            void setInputPin(uint8_t input, uint8_t pin);
+            void saveInputs();
+            void saveCoils();
     };
     #ifdef DEBUG
     #define dbg(x...) debugSerial.print(x);

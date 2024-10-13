@@ -126,19 +126,19 @@ void setupRestApi(AsyncWebServer *server, ModbusClientRTU *rtu, ModbusBridgeWiFi
         if(!json["modbusRtsPin"].isNull()) {
             auto check = json["modbusRtsPin"].as<int8_t>();
             if(check == -1 ||   // Auto
-                check == 4 ||   // D4
-                check == 13 ||  // D13
-                check == 14 ||  // D14
-                check == 18 ||  // D18
-                check == 19 ||  // D19
-                check == 21 ||  // D21
-                check == 22 ||  // D22
-                check == 23 ||  // D23
-                check == 25 ||  // D25
-                check == 26 ||  // D26
-                check == 27 ||  // D27
-                check == 32 ||  // D32
-                check == 33     // D33
+                check == 4 ||   // GPIO4
+                check == 13 ||  // GPIO13
+                check == 14 ||  // GPIO14
+                check == 18 ||  // GPIO18
+                check == 19 ||  // GPIO19
+                check == 21 ||  // GPIO21
+                check == 22 ||  // GPIO22
+                check == 23 ||  // GPIO23
+                check == 25 ||  // GPIO25
+                check == 26 ||  // GPIO26
+                check == 27 ||  // GPIO27
+                check == 32 ||  // GPIO32
+                check == 33     // GPIO33
                 ) {
                 _modbusStopBits = check;
                 root["acceptableConfig"]["modbusRtsPin"] = check;
@@ -366,7 +366,7 @@ void setupRestApi(AsyncWebServer *server, ModbusClientRTU *rtu, ModbusBridgeWiFi
         root["info"]["modbusDataBits"] = "5..8";
         root["info"]["modbusParity"] = "0: None, 2: Even, 3: Odd";
         root["info"]["modbusStopBits"] = "1: 1 bit, 2: 1.5 bits, 3: 2 bits";
-        root["info"]["modbusRtsPin"] = "-1: Auto, X: Pin DX";
+        root["info"]["modbusRtsPin"] = "-1: Auto, X: Pin GPIOX";
         root["info"]["serialDataBits"] = "5..8";
         root["info"]["serialParity"] = "0: None, 2: Even, 3: Odd";
         root["info"]["serialStopBits"] = "1: 1 bit, 2: 1.5 bits, 3: 2 bits";
