@@ -117,12 +117,39 @@ ModbusMessage FC02(ModbusMessage request) {
 }
 
 // FC03: worker do serve Modbus function code 0x03 (READ_HOLD_REGISTER)
+// Gets the current temperature (from address 0x00 with a length of 4 Bytes)
 ModbusMessage FC03(ModbusMessage request) {
     uint16_t address;           // requested register address
     uint16_t words;             // requested number of registers
     ModbusMessage response;     // response message to be sent back
 
     LOG_D("Worker for FC03\n");
+
+    // get request values
+    request.get(2, address);
+    request.get(4, words);
+
+    // return current temperature
+    if (address == 0 && words == 2) {
+        // Looks okay. Set up message with serverID, FC and length of data
+        response.add(request.getServerID(), request.getFunctionCode(), (uint8_t)(words * 2));
+        // add current temperature to response
+        response.add(temperatureRead());
+    } else {
+        // Set up error response.
+        response.setError(request.getServerID(), request.getFunctionCode(), ILLEGAL_DATA_ADDRESS);
+    }
+    return response;
+}
+
+// FC04: worker do serve Modbus function code 0x04 (READ_INPUT_REGISTER)
+// Gets the current temperature (from address 0x00 with a length of 4 Bytes)
+ModbusMessage FC04(ModbusMessage request) {
+    uint16_t address;           // requested register address
+    uint16_t words;             // requested number of registers
+    ModbusMessage response;     // response message to be sent back
+
+    LOG_D("Worker for FC04\n");
 
     // get request values
     request.get(2, address);
@@ -255,14 +282,14 @@ void setupLocalModbus(uint8_t serverID, ModbusClientRTU *rtu, ModbusBridgeWiFi *
     _bridge = bridge;
     _config = config;
     _serverID = serverID;
-    bridge->registerWorker(serverID, READ_HOLD_REGISTER, &FC03);
+    //bridge->registerWorker(serverID, READ_HOLD_REGISTER, &FC03);
+    bridge->registerWorker(serverID, READ_INPUT_REGISTER, &FC04);
     bridge->registerWorker(serverID, DIAGNOSTICS_SERIAL, &FC08);
 }
 
 void enableCoilWorkers() {
     _bridge->registerWorker(_serverID, READ_COIL, &FC01);
     _bridge->registerWorker(_serverID, WRITE_COIL, &FC05);
-    // _bridge->registerWorker(_serverID, WRITE_MULT_COILS, &FC0F); 
 }
 
 void enableInputWorkers() {
